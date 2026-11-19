@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f172a">
+<title>Voice-to-UPC Barcode Generator</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface-hover: #334155;
+    --border: #334155;
+    --text: #f8fafc;
+    --text-muted: #94a3b8;
+    --primary: #3b82f6;
+    --primary-hover: #2563eb;
+    --accent: #10b981;
+    --danger: #ef4444;
+    --warning: #f59e0b;
+  }
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  body {
+    background-color: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px 16px 48px;
+  }
+  .container {
+    width: 100%;
+    max-width: 680px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  header {
+    text-align: center;
+    padding: 8px 0;
+  }
+  header h1 {
+    font-size: 1.65rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  header p {
+    color: var(--text-muted);
+    font-size: 0.92rem;
+    margin-top: 4px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  }
+  .voice-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    text-align: center;
+  }
+  .mic-btn {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    border: none;
+    background: var(--primary);
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s ease, background 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
+  }
+  .mic-btn:hover {
+    background: var(--primary-hover);
+    transform: scale(1.04);
+  }
+  .mic-btn.listening {
+    background: var(--danger);
+    animation: pulse 1.4s infinite;
+  }
+  .mic-btn:disabled {
+    background: var(--surface-hover);
+    color: var(--text-muted);
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+  }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+    70% { box-shadow: 0 0 0 18px rgba(239, 68, 68, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+  }
+  .voice-status {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    min-height: 1.3em;
+  }
+  .voice-status.active {
+    color: #fca5a5;
+    font-weight: 600;
+  }
+  .transcript-box {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    width: 100%;
+    display: none;
+  }
+  .input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 16px;
+  }
+  .input-group label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .input-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  input[type="text"] {
+    flex: 1;
+    min-width: 200px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    color: var(--text);
+    font-size: 1.15rem;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    letter-spacing: 0.08em;
+  }
+  input[type="text"]:focus {
+    outline: none;
+    border-color: var(--primary);
+  }
+  .btn {
+    padding: 11px 16px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface-hover);
+    color: var(--text);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .btn:hover {
+    background: #475569;
+  }
+  .btn-primary {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+  }
+  .btn-primary:hover {
+    background: var(--primary-hover);
+  }
+  .btn-accent {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #064e3b;
+  }
+  .btn-accent:hover {
+    background: #059669;
+    color: white;
+  }
+  .alert {
+    margin-top: 12px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    line-height: 1.4;
+    display: none;
+  }
+  .alert.warning {
+    display: block;
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    color: #fcd34d;
+  }
+  .alert.info {
+    display: block;
+    background: rgba(59, 130, 246, 0.15);
+    border: 1px solid rgba(59, 130, 246, 0.4);
+    color: #93c5fd;
+  }
+  .alert.error {
+    display: block;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    color: #fca5a5;
+  }
+  .barcode-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+  .label-input-wrap {
+    width: 100%;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  .label-input-wrap input {
+    font-family: inherit;
+    font-size: 0.95rem;
+    letter-spacing: normal;
+    padding: 9px 12px;
+  }
+  .barcode-stage {
+    background: #ffffff;
+    padding: 20px 24px 14px;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-shadow: inset 0 0 0 1px #e2e8f0;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  #barcodeSvg {
+    max-width: 100%;
+    height: auto;
+    display: block;
+  }
+  .meta-pills {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .pill {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 5px 12px;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+  .pill strong {
+    color: var(--text);
+  }
+  .actions-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+  }
+  .history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .history-header h2 {
+    font-size: 1.05rem;
+    font-weight: 600;
+  }
+  .history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .history-item {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .history-code {
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+  }
+  .history-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    display: block;
+  }
+  .history-btns {
+    display: flex;
+    gap: 6px;
+  }
+  .btn-sm {
+    padding: 6px 10px;
+    font-size: 0.8rem;
+    border-radius: 7px;
+  }
+  .empty-history {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    padding: 12px 0;
+  }
+  @media print {
+    body {
+      background: white;
+      padding: 0;
+    }
+    .container > :not(#barcodeCard),
+    #barcodeCard > :not(.barcode-display),
+    .barcode-display > :not(.barcode-stage) {
+      display: none !important;
+    }
+    #barcodeCard {
+      border: none;
+      box-shadow: none;
+      padding: 0;
+    }
+    .barcode-stage {
+      box-shadow: none;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>Voice-to-UPC Generator</h1>
+    <p>Speak or enter 11–12 digits to generate scannable UPC-A barcodes offline</p>
+  </header>
+
+  <section class="card">
+    <div class="voice-section">
+      <button id="micBtn" class="mic-btn" type="button" title="Start Voice Input" aria-label="Start Voice Input">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+          <line x1="12" y1="19" x2="12" y2="22"></line>
+        </svg>
+      </button>
+      <div id="voiceStatus" class="voice-status">Tap microphone to dictate digits (e.g., "1 2 3 4 5 6 7 8 9 1 0")</div>
+      <div id="transcriptBox" class="transcript-box"></div>
+    </div>
+
+    <div class="input-group">
+      <label for="upcInput">UPC-A Digits (11 Base or 12 Full)</label>
+      <div class="input-row">
+        <input id="upcInput" type="text" inputmode="numeric" maxlength="14" placeholder="12345678910" value="12345678910" autocomplete="off">
+        <button id="randomBtn" class="btn" type="button">Random Valid UPC</button>
+        <button id="clearBtn" class="btn" type="button">Clear</button>
+      </div>
+    </div>
+
+    <div id="statusAlert" class="alert"></div>
+  </section>
+
+  <section id="barcodeCard" class="card">
+    <div class="barcode-display">
+      <div class="label-input-wrap">
+        <input id="labelInput" type="text" maxlength="40" placeholder="Optional item label above barcode (e.g., SKU-104)">
+      </div>
+
+      <div class="barcode-stage">
+        <svg id="barcodeSvg" xmlns="http://www.w3.org/2000/svg" width="339" height="170" viewBox="0 0 339 170"></svg>
+      </div>
+
+      <div class="meta-pills">
+        <div class="pill">Full UPC-A: <strong id="fullCodeDisplay">123456789104</strong></div>
+        <div class="pill">11-Digit Base: <strong id="baseCodeDisplay">12345678910</strong></div>
+        <div class="pill">Check Digit: <strong id="checkDigitDisplay">4</strong></div>
+      </div>
+
+      <div class="actions-row">
+        <button id="downloadPngBtn" class="btn btn-primary" type="button">Download PNG</button>
+        <button id="downloadSvgBtn" class="btn" type="button">Download SVG</button>
+        <button id="copyBtn" class="btn" type="button">Copy UPC</button>
+        <button id="printBtn" class="btn" type="button">Print Label</button>
+        <button id="saveHistoryBtn" class="btn btn-accent" type="button">Save to List</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="history-header">
+      <h2>Saved Barcodes</h2>
+      <button id="clearHistoryBtn" class="btn btn-sm" type="button">Clear List</button>
+    </div>
+    <div id="historyList" class="history-list">
+      <div class="empty-history">No saved barcodes yet. Click "Save to List" or generate via voice.</div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function() {
+  const L_CODES = [
+    "0001101", "0011001", "0010011", "0111101", "0100011",
+    "0110001", "0101111", "0111011", "0110111", "0001011"
+  ];
+  const R_CODES = [
+    "1110010", "1100110", "1101100", "1000010", "1011100",
+    "1001110", "1010000", "1000100", "1001000", "1110100"
+  ];
+
+  const WORD_DIGITS = {
+    "zero": "0", "oh": "0", "o": "0",
+    "one": "1", "won": "1",
+    "two": "2", "to": "2", "too": "2",
+    "three": "3", "tree": "3",
+    "four": "4", "for": "4",
+    "five": "5",
+    "six": "6",
+    "seven": "7",
+    "eight": "8", "ate": "8",
+    "nine": "9"
+  };
+
+  const upcInput = document.getElementById("upcInput");
+  const labelInput = document.getElementById("labelInput");
+  const statusAlert = document.getElementById("statusAlert");
+  const barcodeSvg = document.getElementById("barcodeSvg");
+  const fullCodeDisplay = document.getElementById("fullCodeDisplay");
+  const baseCodeDisplay = document.getElementById("baseCodeDisplay");
+  const checkDigitDisplay = document.getElementById("checkDigitDisplay");
+  const micBtn = document.getElementById("micBtn");
+  const voiceStatus = document.getElementById("voiceStatus");
+  const transcriptBox = document.getElementById("transcriptBox");
+  const historyList = document.getElementById("historyList");
+
+  let currentValid12 = "123456789104";
+  let savedItems = [];
+
+  try {
+    const stored = localStorage.getItem("upc_app_history");
+    if (stored) savedItems = JSON.parse(stored);
+  } catch (e) {}
+
+  function computeCheckDigit(base11) {
+    let oddSum = 0;
+    let evenSum = 0;
+    for (let i = 0; i < 11; i++) {
+      const d = parseInt(base11[i], 10);
+      if (i % 2 === 0) oddSum += d;
+      else evenSum += d;
+    }
+    const total = oddSum * 3 + evenSum;
+    return String((10 - (total % 10)) % 10);
+  }
+
+  function showAlert(type, message) {
+    statusAlert.className = "alert " + type;
+    statusAlert.textContent = message;
+  }
+
+  function clearAlert() {
+    statusAlert.className = "alert";
+    statusAlert.textContent = "";
+  }
+
+  function parseSpokenToDigits(text) {
+    const tokens = text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/);
+    let out = "";
+    for (const token of tokens) {
+      if (!token) continue;
+      if (/^\d+$/.test(token)) {
+        out += token;
+      } else if (Object.prototype.hasOwnProperty.call(WORD_DIGITS, token)) {
+        out += WORD_DIGITS[token];
+      }
+    }
+    return out;
+  }
+
+  function renderBarcodeSVG(upc12, labelText) {
+    const moduleWidth = 3;
+    const quietModules = 9;
+    const totalModules = quietModules + 3 + (6 * 7) + 5 + (6 * 7) + 3 + quietModules; // 113
+    const width = totalModules * moduleWidth; // 339
+    const topMargin = labelText ? 28 : 12;
+    const barHeight = 115;
+    const guardExtension = 14;
+    const height = topMargin + barHeight + 36;
+
+    barcodeSvg.setAttribute("width", width);
+    barcodeSvg.setAttribute("height", height);
+    barcodeSvg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+
+    let svgParts = [];
+    svgParts.push(`<rect x="0" y="0" width="${width}" height="${height}" fill="#ffffff"/>`);
+
+    if (labelText) {
+      const escapedLabel = labelText
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      svgParts.push(
+        `<text x="${width / 2}" y="20" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="bold" fill="#000000">${escapedLabel}</text>`
+      );
+    }
+
+    let cursor = quietModules;
+
+    function drawPattern(bits, isGuard) {
+      const h = isGuard ? barHeight + guardExtension : barHeight;
+      for (let i = 0; i < bits.length; i++) {
+        if (bits[i] === "1") {
+          const x = cursor * moduleWidth;
+          svgParts.push(`<rect x="${x}" y="${topMargin}" width="${moduleWidth}" height="${h}" fill="#000000"/>`);
+        }
+        cursor++;
+      }
+    }
+
+    // Start guard
+    drawPattern("101", true);
+
+    // Left 6 digits
+    for (let i = 0; i < 6; i++) {
+      const digit = parseInt(upc12[i], 10);
+      drawPattern(L_CODES[digit], false);
+    }
+
+    // Center guard
+    drawPattern("01010", true);
+
+    // Right 6 digits
+    for (let i = 6; i < 12; i++) {
+      const digit = parseInt(upc12[i], 10);
+      drawPattern(R_CODES[digit], false);
+    }
+
+    // End guard
+    drawPattern("101", true);
+
+    const textY = topMargin + barHeight + 22;
+    // First digit (number system)
+    svgParts.push(
+      `<text x="${(quietModules - 3) * moduleWidth}" y="${textY}" text-anchor="middle" font-family="Courier New, monospace" font-size="18" font-weight="bold" fill="#000000">${upc12[0]}</text>`
+    );
+
+    // Left 5 digits (indices 1..5)
+    for (let i = 1; i <= 5; i++) {
+      const centerModule = quietModules + 3 + (i * 7) + 3.5;
+      svgParts.push(
+        `<text x="${centerModule * moduleWidth}" y="${textY}" text-anchor="middle" font-family="Courier New, monospace" font-size="18" font-weight="bold" fill="#000000">${upc12[i]}</text>`
+      );
+    }
+
+    // Right 5 digits (indices 6..10)
+    for (let i = 6; i <= 10; i++) {
+      const rightIndex = i - 6;
+      const centerModule = quietModules + 3 + 42 + 5 + (rightIndex * 7) + 3.5;
+      svgParts.push(
+        `<text x="${centerModule * moduleWidth}" y="${textY}" text-anchor="middle" font-family="Courier New, monospace" font-size="18" font-weight="bold" fill="#000000">${upc12[i]}</text>`
+      );
+    }
+
+    // Last digit (check digit)
+    svgParts.push(
+      `<text x="${(totalModules - quietModules + 3) * moduleWidth}" y="${textY}" text-anchor="middle" font-family="Courier New, monospace" font-size="18" font-weight="bold" fill="#000000">${upc12[11]}</text>`
+    );
+
+    barcodeSvg.innerHTML = svgParts.join("");
+  }
+
+  function processInput(rawValue) {
+    const digitsOnly = rawValue.replace(/\D/g, "");
+    clearAlert();
+
+    if (digitsOnly.length === 0) {
+      showAlert("info", "Enter 11 or 12 digits, tap the microphone, or generate a random valid UPC.");
+      return;
+    }
+
+    let base11 = "";
+    if (digitsOnly.length < 11) {
+      base11 = digitsOnly.padEnd(11, "0");
+      showAlert("info", `Padded ${digitsOnly.length} entered digit(s) with trailing zeros to 11-digit base (${base11}).`);
+    } else if (digitsOnly.length === 11) {
+      base11 = digitsOnly;
+    } else if (digitsOnly.length === 12) {
+      base11 = digitsOnly.slice(0, 11);
+      const expectedCheck = computeCheckDigit(base11);
+      const enteredCheck = digitsOnly[11];
+      if (enteredCheck !== expectedCheck) {
+        showAlert("warning", `Entered 12th check digit (${enteredCheck}) was invalid for ${base11}. Corrected check digit to ${expectedCheck}.`);
+      }
+    } else {
+      base11 = digitsOnly.slice(0, 11);
+      showAlert("warning", `Input had ${digitsOnly.length} digits. Trimmed to the first 11 digits (${base11}) for standard UPC-A.`);
+    }
+
+    const checkDigit = computeCheckDigit(base11);
+    currentValid12 = base11 + checkDigit;
+
+    fullCodeDisplay.textContent = currentValid12;
+    baseCodeDisplay.textContent = base11;
+    checkDigitDisplay.textContent = checkDigit;
+
+    renderBarcodeSVG(currentValid12, labelInput.value.trim());
+  }
+
+  function generateRandomUPC() {
+    let base11 = "0"; // Standard retail prefix 0
+    for (let i = 1; i < 11; i++) {
+      base11 += Math.floor(Math.random() * 10);
+    }
+    const full12 = base11 + computeCheckDigit(base11);
+    upcInput.value = full12;
+    processInput(full12);
+  }
+
+  function downloadSVG() {
+    const serializer = new XMLSerializer();
+    const svgString = serializer.serializeToString(barcodeSvg);
+    const blob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `UPC-${currentValid12}.svg`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function downloadPNG() {
+    const serializer = new XMLSerializer();
+    const svgString = serializer.serializeToString(barcodeSvg);
+    const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(svgBlob);
+
+    const img = new Image();
+    img.onload = function() {
+      const scale = 3; // High-DPI crisp print output
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+
+      canvas.toBlob(function(pngBlob) {
+        const pngUrl = URL.createObjectURL(pngBlob);
+        const a = document.createElement("a");
+        a.href = pngUrl;
+        a.download = `UPC-${currentValid12}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(pngUrl);
+      }, "image/png");
+    };
+    img.src = url;
+  }
+
+  function saveToHistory(upc12, label) {
+    savedItems = savedItems.filter(item => item.code !== upc12);
+    savedItems.unshift({ code: upc12, label: label || "" });
+    if (savedItems.length > 25) savedItems.pop();
+    try {
+      localStorage.setItem("upc_app_history", JSON.stringify(savedItems));
+    } catch (e) {}
+    renderHistory();
+  }
+
+  function renderHistory() {
+    if (savedItems.length === 0) {
+      historyList.innerHTML = `<div class="empty-history">No saved barcodes yet. Click "Save to List" or generate via voice.</div>`;
+      return;
+    }
+    historyList.innerHTML = "";
+    savedItems.forEach((item, idx) => {
+      const row = document.createElement("div");
+      row.className = "history-item";
+
+      const info = document.createElement("div");
+      const codeSpan = document.createElement("span");
+      codeSpan.className = "history-code";
+      codeSpan.textContent = item.code;
+      info.appendChild(codeSpan);
+
+      if (item.label) {
+        const lblSpan = document.createElement("span");
+        lblSpan.className = "history-label";
+        lblSpan.textContent = item.label;
+        info.appendChild(lblSpan);
+      }
+
+      const btns = document.createElement("div");
+      btns.className = "history-btns";
+
+      const loadBtn = document.createElement("button");
+      loadBtn.className = "btn btn-sm";
+      loadBtn.textContent = "Load";
+      loadBtn.onclick = () => {
+        upcInput.value = item.code;
+        labelInput.value = item.label || "";
+        processInput(item.code);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      };
+
+      const delBtn = document.createElement("button");
+      delBtn.className = "btn btn-sm";
+      delBtn.textContent = "Remove";
+      delBtn.onclick = () => {
+        savedItems.splice(idx, 1);
+        try {
+          localStorage.setItem("upc_app_history", JSON.stringify(savedItems));
+        } catch (e) {}
+        renderHistory();
+      };
+
+      btns.appendChild(loadBtn);
+      btns.appendChild(delBtn);
+
+      row.appendChild(info);
+      row.appendChild(btns);
+      historyList.appendChild(row);
+    });
+  }
+
+  // Event Listeners
+  upcInput.addEventListener("input", () => processInput(upcInput.value));
+  labelInput.addEventListener("input", () => renderBarcodeSVG(currentValid12, labelInput.value.trim()));
+  document.getElementById("randomBtn").addEventListener("click", generateRandomUPC);
+  document.getElementById("clearBtn").addEventListener("click", () => {
+    upcInput.value = "";
+    labelInput.value = "";
+    upcInput.focus();
+    clearAlert();
+  });
+  document.getElementById("downloadPngBtn").addEventListener("click", downloadPNG);
+  document.getElementById("downloadSvgBtn").addEventListener("click", downloadSVG);
+  document.getElementById("printBtn").addEventListener("click", () => window.print());
+  document.getElementById("saveHistoryBtn").addEventListener("click", () => {
+    saveToHistory(currentValid12, labelInput.value.trim());
+    showAlert("info", `Saved UPC ${currentValid12} to your list.`);
+  });
+  document.getElementById("copyBtn").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(currentValid12);
+      showAlert("info", `Copied ${currentValid12} to clipboard.`);
+    } catch (e) {
+      showAlert("info", `UPC: ${currentValid12}`);
+    }
+  });
+  document.getElementById("clearHistoryBtn").addEventListener("click", () => {
+    savedItems = [];
+    try {
+      localStorage.removeItem("upc_app_history");
+    } catch (e) {}
+    renderHistory();
+  });
+
+  // Web Speech API Setup
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    micBtn.disabled = true;
+    voiceStatus.textContent = "Voice dictation is not supported in this browser. Use manual entry or Chrome/Edge/Safari.";
+  } else {
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+    let isListening = false;
+
+    micBtn.addEventListener("click", () => {
+      if (isListening) {
+        recognition.stop();
+      } else {
+        try {
+          recognition.start();
+        } catch (err) {}
+      }
+    });
+
+    recognition.onstart = () => {
+      isListening = true;
+      micBtn.classList.add("listening");
+      voiceStatus.classList.add("active");
+      voiceStatus.textContent = "Listening... Speak your 11 or 12 digits now.";
+      transcriptBox.style.display = "block";
+      transcriptBox.textContent = "Heard: ...";
+    };
+
+    recognition.onresult = (event) => {
+      let transcript = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+      transcriptBox.textContent = `Heard: "${transcript}"`;
+      const extractedDigits = parseSpokenToDigits(transcript);
+      if (extractedDigits.length > 0) {
+        upcInput.value = extractedDigits.slice(0, 12);
+        processInput(upcInput.value);
+      }
+    };
+
+    recognition.onerror = (event) => {
+      if (event.error === "not-allowed") {
+        showAlert("error", "Microphone access was blocked. Allow microphone permission in your browser settings to use voice input.");
+      } else if (event.error !== "aborted") {
+        showAlert("warning", `Voice input stopped (${event.error}). Try again or type digits manually.`);
+      }
+    };
+
+    recognition.onend = () => {
+      isListening = false;
+      micBtn.classList.remove("listening");
+      voiceStatus.classList.remove("active");
+      voiceStatus.textContent = "Tap microphone to dictate digits";
+    };
+  }
+
+  // Initial render
+  processInput(upcInput.value);
+  renderHistory();
+})();
+</script>
+</body>
+</html>
