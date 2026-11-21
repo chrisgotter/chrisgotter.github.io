@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Camera & Voice to Barcode</title>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+  <style>
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+    body {
+      max-width: 520px;
+      margin: 1.5rem auto;
+      padding: 0 1rem;
+      background: #f8fafc;
+      color: #0f172a;
+    }
+    .card {
+      background: #ffffff;
+      padding: 1.25rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+    h1 { font-size: 1.35rem; margin: 0 0 1rem 0; }
+    .controls { display: flex; flex-direction: column; gap: 0.75rem; }
+    label { font-weight: 600; font-size: 0.9rem; }
+    input[type="text"], select, button {
+      width: 100%;
+      padding: 0.75rem;
+      border-radius: 8px;
+      border: 1px solid #cbd5e1;
+      font-size: 1rem;
+    }
+    button {
+      background: #2563eb;
+      color: white;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover { background: #1d4ed8; }
+    button.capture { background: #16a34a; }
+    button.capture:hover { background: #15803d; }
+    button.voice { background: #7c3aed; }
+    button.voice:hover { background: #6d28d9; }
+    button.voice.listening { background: #dc2626; animation: pulse 1.2s infinite; }
+    button.secondary { background: #475569; }
+    .row { display: flex; gap: 0.5rem; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.75; }
+    }
+
+    /* Live Camera Container */
+    .camera-wrap {
+      position: relative;
+      width: 100%;
+      background: #000;
+      border-radius: 8px;
+      overflow: hidden;
+      display: none;
+    }
+    video {
+      width: 100%;
+      display: block;
+      max-height: 280px;
+      object-fit: cover;
+    }
+    .reticle {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 78%;
+      height: 64px;
+      transform: translate(-50%, -50%);
+      border: 3px solid #22c55e;
+      border-radius: 8px;
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+      pointer-events: none;
+    }
+    .reticle-label {
+      position: absolute;
+      bottom: 8px;
+      width: 100%;
+      text-align: center;
+      color: #fff;
+      font-size: 0.8rem;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+      pointer-events: none;
+    }
+
+    .format-hint {
+      font-size: 0.82rem;
+      color: #64748b;
+      margin-top: -0.4rem;
+    }
+    #status {
+      font-size: 0.9rem;
+      color: #475569;
+      min-height: 1.25rem;
+      font-weight: 500;
+    }
+    .barcode-box {
+      text-align: center;
+      margin-top: 1.25rem;
+      padding: 1rem;
+      background: #ffffff;
+      border: 1px dashed #cbd5e1;
+      border-radius: 8px;
+      display: none;
+    }
+    svg { max-width: 100%; height: auto; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Camera &amp; Voice to Barcode</h1>
+
+    <div class="controls">
+      <div class="row">
+        <button id="startCamBtn">Open Camera</button>
+        <button id="voiceBtn" class="voice">Speak Number</button>
+      </div>
+      <button id="stopCamBtn" class="secondary" style="display:none;">Close Camera</button>
+
+      <div class="camera-wrap" id="cameraWrap">
+        <video id="video" autoplay playsinline></video>
+        <div class="reticle"></div>
+        <div class="reticle-label">Align numbers inside the green box</div>
+      </div>
+
+      <button id="snapBtn" class="capture" style="display:none;">Scan Numbers</button>
+
+      <div id="status">Tap "Open Camera" or "Speak Number" to start.</div>
+
+      <label for="formatSelect">Barcode Format</label>
+      <select id="formatSelect">
+        <option value="AUTO">Auto-Detect (By digit length)</option>
+        <option value="CODE128">Code 128 (Any length / Warehouse &amp; Item #)</option>
+        <option value="UPC">UPC-A (11 or 12 digits - North America Retail)</option>
+        <option value="UPCE">UPC-E (6, 7, or 8 digits - Compact Retail)</option>
+        <option value="EAN13">EAN-13 (12 or 13 digits - International Retail)</option>
+        <option value="EAN8">EAN-8 (7 or 8 digits - Small Packages)</option>
+        <option value="ITF14">ITF-14 (13 or 14 digits - Shipping Cartons)</option>
+        <option value="CODE39">Code 39 (Industrial / Inventory)</option>
+        <option value="codabar">Codabar (Libraries / Logistics)</option>
+      </select>
+      <div class="format-hint" id="formatHint">Auto-picks UPC-A (12), EAN-13 (13), ITF-14 (14), or Code 128.</div>
+
+      <label for="numberInput">Detected / Spoken Number (Editable)</label>
+      <div class="row">
+        <input type="text" id="numberInput" inputmode="numeric" placeholder="Digits appear here..." />
+        <button id="clearBtn" class="secondary" style="width: auto; padding: 0 1rem;">Clear</button>
+      </div>
+
+      <button id="generateBtn">Generate Barcode</button>
+    </div>
+
+    <div class="barcode-box" id="barcodeBox">
+      <svg id="barcode"></svg>
+      <button id="downloadBtn" class="secondary" style="margin-top: 0.75rem;">Download PNG</button>
+    </div>
+  </div>
+
+  <canvas id="cropCanvas" style="display:none;"></canvas>
+
+  <script>
+    const startCamBtn = document.getElementById('startCamBtn');
+    const stopCamBtn = document.getElementById('stopCamBtn');
+    const snapBtn = document.getElementById('snapBtn');
+    const voiceBtn = document.getElementById('voiceBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const cameraWrap = document.getElementById('cameraWrap');
+    const video = document.getElementById('video');
+    const cropCanvas = document.getElementById('cropCanvas');
+    const statusEl = document.getElementById('status');
+    const formatSelect = document.getElementById('formatSelect');
+    const formatHint = document.getElementById('formatHint');
+    const numberInput = document.getElementById('numberInput');
+    const generateBtn = document.getElementById('generateBtn');
+    const barcodeBox = document.getElementById('barcodeBox');
+    const downloadBtn = document.getElementById('downloadBtn');
+
+    let stream = null;
+    let recognition = null;
+    let isListening = false;
+
+    const formatDescriptions = {
+      AUTO: 'Auto-picks UPC-A (12), EAN-13 (13), ITF-14 (14), or Code 128.',
+      CODE128: 'Accepts any number of digits. Most versatile for internal item numbers.',
+      UPC: 'Enter or say 11 digits (check digit added automatically) or 12 digits.',
+      UPCE: 'Enter or say 6, 7, or 8 digits (must start with 0 or 1 for 7/8-digit codes).',
+      EAN13: 'Enter or say 12 digits (check digit added automatically) or 13 digits.',
+      EAN8: 'Enter or say 7 digits (check digit added automatically) or 8 digits.',
+      ITF14: 'Enter or say 13 digits (check digit added automatically) or 14 digits.',
+      CODE39: 'Accepts any length of digits (and uppercase letters if typed manually).',
+      codabar: 'Accepts digits and symbols (- $ : / . +) of any length.'
+    };
+
+    formatSelect.addEventListener('change', () => {
+      formatHint.textContent = formatDescriptions[formatSelect.value] || '';
+      if (numberInput.value.trim()) renderBarcode();
+    });
+
+    // --- VOICE INPUT (Web Speech API) ---
+    const wordToDigit = {
+      zero: '0', oh: '0', o: '0',
+      one: '1', won: '1',
+      two: '2', to: '2', too: '2',
+      three: '3',
+      four: '4', for: '4',
+      five: '5',
+      six: '6',
+      seven: '7',
+      eight: '8', ate: '8',
+      nine: '9'
+    };
+
+    function parseSpokenDigits(transcript) {
+      return transcript
+        .toLowerCase()
+        .replace(/[-,]/g, ' ')
+        .split(/\s+/)
+        .map(token => {
+          if (/^\d+$/.test(token)) return token;
+          return wordToDigit[token] || '';
+        })
+        .join('');
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      recognition = new SpeechRecognition();
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => {
+        isListening = true;
+        voiceBtn.textContent = 'Listening... (Tap to Stop)';
+        voiceBtn.classList.add('listening');
+        statusEl.textContent = 'Listening... Speak your digits clearly.';
+      };
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        const digits = parseSpokenDigits(transcript);
+        if (digits) {
+          numberInput.value = digits;
+          statusEl.textContent = `Heard "${transcript}" -> ${digits}`;
+          renderBarcode();
+        } else {
+          statusEl.textContent = `Heard "${transcript}", but couldn't find digits. Try again.`;
+        }
+      };
+
+      recognition.onerror = (event) => {
+        statusEl.textContent = `Microphone error: ${event.error}. Ensure HTTPS & mic permissions are enabled.`;
+      };
+
+      recognition.onend = () => {
+        isListening = false;
+        voiceBtn.textContent = 'Speak Number';
+        voiceBtn.classList.remove('listening');
+      };
+    }
+
+    voiceBtn.addEventListener('click', () => {
+      if (!recognition) {
+        statusEl.textContent = 'Speech recognition is not supported in this browser. Try Chrome, Edge, or Safari.';
+        return;
+      }
+      if (isListening) {
+        recognition.stop();
+      } else {
+        recognition.start();
+      }
+    });
+
+    // --- CAMERA INPUT ---
+    async function startCamera() {
+      try {
+        statusEl.textContent = 'Requesting camera access...';
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } },
+          audio: false
+        });
+        video.srcObject = stream;
+        cameraWrap.style.display = 'block';
+        snapBtn.style.display = 'block';
+        stopCamBtn.style.display = 'block';
+        startCamBtn.textContent = 'Camera Active';
+        statusEl.textContent = 'Line up the digits inside the green box and tap "Scan Numbers".';
+      } catch (err) {
+        statusEl.textContent = 'Camera blocked or unavailable. Make sure this page is opened over HTTPS.';
+      }
+    }
+
+    function stopCamera() {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+      }
+      cameraWrap.style.display = 'none';
+      snapBtn.style.display = 'none';
+      stopCamBtn.style.display = 'none';
+      startCamBtn.textContent = 'Open Camera';
+      statusEl.textContent = 'Camera closed.';
+    }
+
+    // --- BARCODE GENERATION ---
+    function calcGs1CheckDigit(digits) {
+      let sum = 0;
+      const reversed = digits.split('').reverse();
+      for (let i = 0; i < reversed.length; i++) {
+        const n = parseInt(reversed[i], 10);
+        sum += (i % 2 === 0) ? n * 3 : n;
+      }
+      return (10 - (sum % 10)) % 10;
+    }
+
+    function resolveFormat(raw) {
+      const selected = formatSelect.value;
+      if (selected !== 'AUTO') return selected;
+
+      if (raw.length === 12) return 'UPC';
+      if (raw.length === 13) return 'EAN13';
+      if (raw.length === 14) return 'ITF14';
+      if (raw.length === 8) return 'EAN8';
+      return 'CODE128';
+    }
+
+    function renderBarcode() {
+      let raw = numberInput.value.trim();
+      if (!raw) {
+        statusEl.textContent = 'Please scan, speak, or enter a value first.';
+        return;
+      }
+
+      const selected = formatSelect.value;
+      if (selected !== 'CODE39' && selected !== 'codabar') {
+        raw = raw.replace(/\D/g, '');
+      }
+
+      const format = resolveFormat(raw);
+
+      const fixedLengths = { UPC: 12, EAN13: 13, EAN8: 8, ITF14: 14 };
+      if (fixedLengths[format]) {
+        const targetLen = fixedLengths[format];
+        if (raw.length === targetLen - 1) {
+          raw = raw + calcGs1CheckDigit(raw);
+          numberInput.value = raw;
+        } else if (raw.length === targetLen) {
+          const expected = calcGs1CheckDigit(raw.slice(0, targetLen - 1));
+          if (parseInt(raw[targetLen - 1], 10) !== expected) {
+            raw = raw.slice(0, targetLen - 1) + expected;
+            numberInput.value = raw;
+          }
+        } else {
+          statusEl.textContent = `${format} requires ${targetLen - 1} or ${targetLen} digits (got ${raw.length}).`;
+          return;
+        }
+      }
+
+      try {
+        JsBarcode('#barcode', raw, {
+          format: format,
+          lineColor: '#000000',
+          width: 2.3,
+          height: 90,
+          displayValue: true,
+          fontSize: 18
+        });
+        barcodeBox.style.display = 'block';
+        statusEl.textContent = `Generated ${format} barcode for ${raw}.`;
+      } catch (err) {
+        statusEl.textContent = `Invalid input for ${format}: ${err.message}`;
+      }
+    }
+
+    snapBtn.addEventListener('click', async () => {
+      if (!video.videoWidth) return;
+
+      statusEl.textContent = 'Reading digits...';
+      snapBtn.disabled = true;
+
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
+      const cropW = Math.floor(vw * 0.78);
+      const cropH = Math.floor(vh * 0.25);
+      const cropX = Math.floor((vw - cropW) / 2);
+      const cropY = Math.floor((vh - cropH) / 2);
+
+      cropCanvas.width = cropW;
+      cropCanvas.height = cropH;
+      const ctx = cropCanvas.getContext('2d');
+      ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+      try {
+        const worker = await Tesseract.createWorker('eng');
+        await worker.setParameters({
+          tessedit_char_whitelist: '0123456789'
+        });
+        const { data: { text } } = await worker.recognize(cropCanvas);
+        await worker.terminate();
+
+        const digits = text.replace(/\D/g, '');
+        if (digits) {
+          numberInput.value = digits;
+          statusEl.textContent = `Scanned: ${digits}`;
+          renderBarcode();
+        } else {
+          statusEl.textContent = 'No numbers detected in the green box. Hold steady and try again.';
+        }
+      } catch (err) {
+        statusEl.textContent = 'Scan error: ' + err.message;
+      } finally {
+        snapBtn.disabled = false;
+      }
+    });
+
+    startCamBtn.addEventListener('click', startCamera);
+    stopCamBtn.addEventListener('click', stopCamera);
+    generateBtn.addEventListener('click', renderBarcode);
+    clearBtn.addEventListener('click', () => {
+      numberInput.value = '';
+      barcodeBox.style.display = 'none';
+      statusEl.textContent = 'Cleared.';
+    });
+
+    downloadBtn.addEventListener('click', () => {
+      const svg = document.getElementById('barcode');
+      const serializer = new XMLSerializer();
+      const svgStr = serializer.serializeToString(svg);
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+
+      img.onload = () => {
+        canvas.width = img.width + 40;
+        canvas.height = img.height + 40;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 20, 20);
+        const link = document.createElement('a');
+        link.download = `barcode-${numberInput.value}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      };
+      img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgStr)));
+    });
+  </script>
+</body>
+</html>
