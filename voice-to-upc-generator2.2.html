@@ -1,0 +1,2120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f172a">
+<title>Voice-to-Barcode Generator</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface-hover: #334155;
+    --border: #334155;
+    --text: #f8fafc;
+    --text-muted: #94a3b8;
+    --primary: #3b82f6;
+    --primary-hover: #2563eb;
+    --accent: #10b981;
+    --danger: #ef4444;
+    --warning: #f59e0b;
+  }
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  body {
+    background-color: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px 16px 48px;
+  }
+  .container {
+    width: 100%;
+    max-width: 720px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  header {
+    text-align: center;
+    padding: 8px 0;
+  }
+  header h1 {
+    font-size: 1.65rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  header p {
+    color: var(--text-muted);
+    font-size: 0.92rem;
+    margin-top: 4px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  }
+  .format-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 18px;
+  }
+  .format-bar-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    text-align: center;
+  }
+  .format-tabs {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+    background: var(--bg);
+    padding: 5px;
+    border-radius: 11px;
+    border: 1px solid var(--border);
+  }
+  @media (max-width: 560px) {
+    .format-tabs {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .format-tab[data-format="CODE128"] {
+      grid-column: span 2;
+    }
+  }
+  .format-tab {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    padding: 8px 6px;
+    border-radius: 7px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 2px;
+    line-height: 1.25;
+  }
+  .format-tab:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.05);
+  }
+  .format-tab.active {
+    background: var(--primary);
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);
+  }
+  .format-tab small {
+    font-size: 0.68rem;
+    font-weight: 500;
+    opacity: 0.85;
+  }
+  .voice-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    text-align: center;
+  }
+  .mic-btn {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    border: none;
+    background: var(--primary);
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s ease, background 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
+  }
+  .mic-btn:hover {
+    background: var(--primary-hover);
+    transform: scale(1.04);
+  }
+  .mic-btn.listening {
+    background: var(--danger);
+    animation: pulse 1.4s infinite;
+  }
+  .mic-btn:disabled {
+    background: var(--surface-hover);
+    color: var(--text-muted);
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+  }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+    70% { box-shadow: 0 0 0 18px rgba(239, 68, 68, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+  }
+  .voice-status {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    min-height: 1.3em;
+  }
+  .voice-status.active {
+    color: #fca5a5;
+    font-weight: 600;
+  }
+  .transcript-box {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    width: 100%;
+    display: none;
+  }
+  .input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 16px;
+  }
+  .input-group label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .input-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  input[type="text"],
+  input[type="search"] {
+    flex: 1;
+    min-width: 200px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    color: var(--text);
+    font-size: 1.15rem;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    letter-spacing: 0.06em;
+  }
+  input[type="text"]:focus,
+  input[type="search"]:focus {
+    outline: none;
+    border-color: var(--primary);
+  }
+  .btn {
+    padding: 11px 16px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface-hover);
+    color: var(--text);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .btn:hover {
+    background: #475569;
+  }
+  .btn-primary {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+  }
+  .btn-primary:hover {
+    background: var(--primary-hover);
+  }
+  .btn-accent {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #064e3b;
+  }
+  .btn-accent:hover {
+    background: #059669;
+    color: white;
+  }
+  .alert {
+    margin-top: 12px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    line-height: 1.4;
+    display: none;
+  }
+  .alert.warning {
+    display: block;
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    color: #fcd34d;
+  }
+  .alert.info {
+    display: block;
+    background: rgba(59, 130, 246, 0.15);
+    border: 1px solid rgba(59, 130, 246, 0.4);
+    color: #93c5fd;
+  }
+  .alert.error {
+    display: block;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    color: #fca5a5;
+  }
+  .barcode-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+  .label-section {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .label-input-wrap {
+    width: 100%;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .label-input-wrap input {
+    min-width: 0;
+    font-family: inherit;
+    font-size: 0.95rem;
+    letter-spacing: normal;
+    padding: 9px 12px;
+  }
+  .inline-mic-btn {
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+    border-radius: 9px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text-muted);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+  }
+  .inline-mic-btn:hover {
+    color: var(--text);
+    border-color: var(--primary);
+    background: var(--surface-hover);
+  }
+  .inline-mic-btn.listening {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: #ffffff;
+    animation: pulse-sm 1.4s infinite;
+  }
+  .inline-mic-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .label-voice-status {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 5px 10px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+  .label-voice-status.visible {
+    display: flex;
+  }
+  .label-voice-status.listening {
+    border-color: rgba(239, 68, 68, 0.5);
+    color: #fca5a5;
+  }
+  .barcode-stage {
+    background: #ffffff;
+    padding: 20px 24px 14px;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-shadow: inset 0 0 0 1px #e2e8f0;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  #barcodeSvg {
+    max-width: 100%;
+    height: auto;
+    display: block;
+  }
+  .meta-pills {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .pill {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 5px 12px;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+  .pill strong {
+    color: var(--text);
+  }
+  .actions-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+  }
+  .history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .history-title-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .history-header h2 {
+    font-size: 1.05rem;
+    font-weight: 600;
+  }
+  .history-count-badge {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+  .history-filters {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 14px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .search-bar-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .search-input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 1;
+  }
+  .search-icon {
+    position: absolute;
+    left: 12px;
+    color: var(--text-muted);
+    pointer-events: none;
+    display: flex;
+  }
+  .search-input-wrap input {
+    width: 100%;
+    min-width: 0;
+    font-family: inherit;
+    font-size: 0.9rem;
+    letter-spacing: normal;
+    padding: 9px 34px 9px 36px;
+    border-radius: 9px;
+  }
+  .search-clear-btn {
+    position: absolute;
+    right: 8px;
+    background: var(--surface-hover);
+    border: none;
+    color: var(--text-muted);
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    line-height: 1;
+  }
+  .search-clear-btn:hover {
+    color: var(--text);
+    background: #475569;
+  }
+  .search-clear-btn.visible {
+    display: flex;
+  }
+  @keyframes pulse-sm {
+    0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+  }
+  .filter-voice-status {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+  .filter-voice-status.visible {
+    display: flex;
+  }
+  .filter-voice-status.listening {
+    border-color: rgba(239, 68, 68, 0.5);
+    color: #fca5a5;
+  }
+  .voice-dismiss-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 0 4px;
+  }
+  .voice-dismiss-btn:hover {
+    color: var(--text);
+  }
+  .filter-chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .filter-chip {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 5px 10px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .filter-chip:hover {
+    border-color: #475569;
+    color: var(--text);
+  }
+  .filter-chip.active {
+    background: rgba(59, 130, 246, 0.2);
+    border-color: var(--primary);
+    color: #93c5fd;
+  }
+  .filter-chip .chip-count {
+    font-size: 0.7rem;
+    opacity: 0.8;
+  }
+  .history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .history-item {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .history-code-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .format-badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 5px;
+    background: rgba(59, 130, 246, 0.18);
+    color: #93c5fd;
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    letter-spacing: 0.04em;
+  }
+  .history-code {
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+  }
+  .history-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    display: block;
+    margin-top: 2px;
+  }
+  .history-btns {
+    display: flex;
+    gap: 6px;
+  }
+  .btn-sm {
+    padding: 6px 10px;
+    font-size: 0.8rem;
+    border-radius: 7px;
+  }
+  .empty-history {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    padding: 16px 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  @media print {
+    body {
+      background: white;
+      padding: 0;
+    }
+    .container > :not(#barcodeCard),
+    #barcodeCard > :not(.barcode-display),
+    .barcode-display > :not(.barcode-stage) {
+      display: none !important;
+    }
+    #barcodeCard {
+      border: none;
+      box-shadow: none;
+      padding: 0;
+    }
+    .barcode-stage {
+      box-shadow: none;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>Voice-to-Barcode Generator</h1>
+    <p>Speak or enter codes to generate scannable UPC, EAN, and Code 128 barcodes offline</p>
+  </header>
+
+  <section class="card">
+    <div class="format-bar">
+      <div class="format-bar-label">Barcode Format</div>
+      <div class="format-tabs" id="formatTabs" role="tablist" aria-label="Barcode Format">
+        <button type="button" class="format-tab active" data-format="UPCA">UPC-A<small>12 digits</small></button>
+        <button type="button" class="format-tab" data-format="EAN13">EAN-13<small>13 digits</small></button>
+        <button type="button" class="format-tab" data-format="EAN8">EAN-8<small>8 digits</small></button>
+        <button type="button" class="format-tab" data-format="UPCE">UPC-E<small>8 digits</small></button>
+        <button type="button" class="format-tab" data-format="CODE128">Code 128<small>(Costco Item Number)</small></button>
+      </div>
+    </div>
+
+    <div class="voice-section">
+      <button id="micBtn" class="mic-btn" type="button" title="Start Voice Input" aria-label="Start Voice Input">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+          <line x1="12" y1="19" x2="12" y2="22"></line>
+        </svg>
+      </button>
+      <div id="voiceStatus" class="voice-status">Tap microphone to dictate digits (say "save as [label]" to auto-label)</div>
+      <div id="transcriptBox" class="transcript-box"></div>
+    </div>
+
+    <div class="input-group">
+      <label id="inputLabel" for="upcInput">UPC-A Digits (11 Base or 12 Full)</label>
+      <div class="input-row">
+        <input id="upcInput" type="text" inputmode="numeric" maxlength="14" placeholder="12345678910" value="12345678910" autocomplete="off">
+        <button id="randomBtn" class="btn" type="button">Random Valid Code</button>
+        <button id="clearBtn" class="btn" type="button">Clear</button>
+      </div>
+    </div>
+
+    <div id="statusAlert" class="alert"></div>
+  </section>
+
+  <section id="barcodeCard" class="card">
+    <div class="barcode-display">
+      <div class="label-section">
+        <div class="label-input-wrap">
+          <input id="labelInput" type="text" maxlength="40" placeholder="Optional item label above barcode (e.g., SKU-104)">
+          <button id="labelMicBtn" class="inline-mic-btn" type="button" title="Dictate item label" aria-label="Dictate item label">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+              <line x1="12" y1="19" x2="12" y2="22"></line>
+            </svg>
+          </button>
+        </div>
+        <div id="labelVoiceStatus" class="label-voice-status" role="status">
+          <span id="labelVoiceText"></span>
+          <button id="labelVoiceDismiss" class="voice-dismiss-btn" type="button" title="Dismiss">&times;</button>
+        </div>
+      </div>
+
+      <div class="barcode-stage">
+        <svg id="barcodeSvg" xmlns="http://www.w3.org/2000/svg" width="339" height="170" viewBox="0 0 339 170"></svg>
+      </div>
+
+      <div class="meta-pills" id="metaPills"></div>
+
+      <div class="actions-row">
+        <button id="downloadPngBtn" class="btn btn-primary" type="button">Download PNG</button>
+        <button id="downloadSvgBtn" class="btn" type="button">Download SVG</button>
+        <button id="copyBtn" class="btn" type="button">Copy Code</button>
+        <button id="printBtn" class="btn" type="button">Print Label</button>
+        <button id="saveHistoryBtn" class="btn btn-accent" type="button">Save to List</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="history-header">
+      <div class="history-title-group">
+        <h2>Saved Barcodes</h2>
+        <span id="historyCountBadge" class="history-count-badge">0</span>
+      </div>
+      <button id="clearHistoryBtn" class="btn btn-sm" type="button">Clear List</button>
+    </div>
+
+    <div id="historyFilters" class="history-filters">
+      <div class="search-bar-row">
+        <div class="search-input-wrap">
+          <span class="search-icon" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+          </span>
+          <input id="historySearchInput" type="search" placeholder="Search or speak barcode, label, or format..." autocomplete="off" aria-label="Filter saved barcodes">
+          <button id="clearSearchBtn" class="search-clear-btn" type="button" title="Clear search" aria-label="Clear search">&times;</button>
+        </div>
+        <button id="filterMicBtn" class="inline-mic-btn" type="button" title="Voice search saved barcodes (e.g. 'EAN 13', 'SKU 104', or digits)" aria-label="Voice search saved barcodes">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            <line x1="12" y1="19" x2="12" y2="22"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div id="filterVoiceStatus" class="filter-voice-status" role="status">
+        <span id="filterVoiceText"></span>
+        <button id="filterVoiceDismiss" class="voice-dismiss-btn" type="button" title="Dismiss">&times;</button>
+      </div>
+
+      <div class="filter-chips" id="historyFilterChips" role="group" aria-label="Filter saved barcodes by format">
+        <button type="button" class="filter-chip active" data-filter-format="ALL">All <span class="chip-count" data-count-for="ALL">0</span></button>
+        <button type="button" class="filter-chip" data-filter-format="UPCA">UPC-A <span class="chip-count" data-count-for="UPCA">0</span></button>
+        <button type="button" class="filter-chip" data-filter-format="EAN13">EAN-13 <span class="chip-count" data-count-for="EAN13">0</span></button>
+        <button type="button" class="filter-chip" data-filter-format="EAN8">EAN-8 <span class="chip-count" data-count-for="EAN8">0</span></button>
+        <button type="button" class="filter-chip" data-filter-format="UPCE">UPC-E <span class="chip-count" data-count-for="UPCE">0</span></button>
+        <button type="button" class="filter-chip" data-filter-format="CODE128">Code 128 <span class="chip-count" data-count-for="CODE128">0</span></button>
+      </div>
+    </div>
+
+    <div id="historyList" class="history-list">
+      <div class="empty-history">No saved barcodes yet. Click "Save to List" to store barcodes here.</div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function() {
+  // EAN / UPC parity patterns
+  const L_CODES = [
+    "0001101", "0011001", "0010011", "0111101", "0100011",
+    "0110001", "0101111", "0111011", "0110111", "0001011"
+  ];
+  const G_CODES = [
+    "0100111", "0110011", "0011011", "0100001", "0011101",
+    "0111001", "0000101", "0010001", "0001001", "0010111"
+  ];
+  const R_CODES = [
+    "1110010", "1100110", "1101100", "1000010", "1011100",
+    "1001110", "1010000", "1000100", "1001000", "1110100"
+  ];
+
+  // EAN-13 first digit parity table (6 left digits)
+  const EAN13_PARITY = [
+    "LLLLLL", "LLGLGG", "LLGGLG", "LLGGGL", "LGLLGG",
+    "LGGLLG", "LGGGLL", "LGLGLG", "LGLGGL", "LGGLGL"
+  ];
+
+  // UPC-E parity patterns indexed by check digit (0..9)
+  const UPCE_PARITY_NS0 = [
+    "GGGLLL", "GGLGLL", "GGLLGL", "GGLLLG", "GLGGLL",
+    "GLLGGL", "GLLLGG", "GLGLGL", "GLGLLG", "GLLGLG"
+  ];
+
+  // Code 128 patterns (indices 0..106)
+  const CODE128_PATTERNS = [
+    "11011001100","11001101100","11001100110","10010011000","10010001100",
+    "10001001100","10011001000","10011000100","10001100100","11001001000",
+    "11001000100","11000100100","10110011100","10011011100","10011001110",
+    "10111001100","10011101100","10011100110","11001110010","11001011100",
+    "11001001110","11011100100","11001110100","11101101110","11101001100",
+    "11100101100","11100100110","11101100100","11100110100","11100110010",
+    "11011011000","11011000110","11000110110","10100011000","10001011000",
+    "10001000110","10110001000","10001101000","10001100010","11010001000",
+    "11000101000","11000100010","10110111000","10110001110","10001101110",
+    "10111011000","10111000110","10001110110","11101110110","11010001110",
+    "11000101110","11011101000","11011100010","11011101110","11101011000",
+    "11101000110","11100010110","11101101000","11101100010","11100011010",
+    "11101111010","11001000010","11110001010","10100110000","10100001100",
+    "10010110000","10010000110","10000101100","10000100110","10110010000",
+    "10110000100","10011010000","10011000010","10000110100","10000110010",
+    "11000010010","11001010000","11110111010","11000010100","10001111010",
+    "10100111100","10010111100","10010011110","10111100100","10011110100",
+    "10011110010","11110100100","11110010100","11110010010","11011011110",
+    "11011110110","11110110110","10101111000","10100011110","10001011110",
+    "10111101000","10111100010","11110101000","11110100010","10111011110",
+    "10111101110","11101011110","11110101110","11010000100","11010010000",
+    "11010011100","1100011101011"
+  ];
+
+  const WORD_DIGITS = {
+    "zero": "0", "oh": "0", "o": "0",
+    "one": "1", "won": "1",
+    "two": "2", "to": "2", "too": "2",
+    "three": "3", "tree": "3",
+    "four": "4", "for": "4",
+    "five": "5",
+    "six": "6",
+    "seven": "7",
+    "eight": "8", "ate": "8",
+    "nine": "9"
+  };
+
+  const FORMAT_CONFIG = {
+    UPCA: {
+      name: "UPC-A",
+      label: "UPC-A Digits (11 Base or 12 Full)",
+      placeholder: "12345678910",
+      defaultVal: "12345678910",
+      maxLength: 14,
+      inputMode: "numeric",
+      voiceHint: 'Tap mic to dictate digits (e.g., "1 2 3 4 5 6 7 8 9 1 0 save as Olive Oil")',
+      listeningHint: 'Listening... Speak digits, then optionally say "save as [item label]".'
+    },
+    EAN13: {
+      name: "EAN-13",
+      label: "EAN-13 Digits (12 Base or 13 Full)",
+      placeholder: "400638133393",
+      defaultVal: "400638133393",
+      maxLength: 15,
+      inputMode: "numeric",
+      voiceHint: 'Tap mic to dictate 12 or 13 digits (say "save as [label]" to auto-label)',
+      listeningHint: 'Listening... Speak 12 or 13 digits, then optionally say "save as [label]".'
+    },
+    EAN8: {
+      name: "EAN-8",
+      label: "EAN-8 Digits (7 Base or 8 Full)",
+      placeholder: "9638507",
+      defaultVal: "9638507",
+      maxLength: 10,
+      inputMode: "numeric",
+      voiceHint: 'Tap mic to dictate 7 or 8 digits (say "save as [label]" to auto-label)',
+      listeningHint: 'Listening... Speak 7 or 8 digits, then optionally say "save as [label]".'
+    },
+    UPCE: {
+      name: "UPC-E",
+      label: "UPC-E Digits (6 Core, 7 with NS 0/1, or 8 Full)",
+      placeholder: "0421000",
+      defaultVal: "0421000",
+      maxLength: 10,
+      inputMode: "numeric",
+      voiceHint: 'Tap mic to dictate 6 to 8 digits (say "save as [label]" to auto-label)',
+      listeningHint: 'Listening... Speak 6 to 8 digits, then optionally say "save as [label]".'
+    },
+    CODE128: {
+      name: "Code 128",
+      label: "Code 128B Text / Costco Item Number",
+      placeholder: "ITEM-2026-A1",
+      defaultVal: "ITEM-2026-A1",
+      maxLength: 48,
+      inputMode: "text",
+      voiceHint: 'Tap mic to dictate item number or text (say "save as [label]" to auto-label)',
+      listeningHint: 'Listening... Speak code/item number, then optionally say "save as [label]".'
+    }
+  };
+
+  const upcInput = document.getElementById("upcInput");
+  const inputLabel = document.getElementById("inputLabel");
+  const labelInput = document.getElementById("labelInput");
+  const labelMicBtn = document.getElementById("labelMicBtn");
+  const labelVoiceStatus = document.getElementById("labelVoiceStatus");
+  const labelVoiceText = document.getElementById("labelVoiceText");
+  const labelVoiceDismiss = document.getElementById("labelVoiceDismiss");
+  const statusAlert = document.getElementById("statusAlert");
+  const barcodeSvg = document.getElementById("barcodeSvg");
+  const metaPills = document.getElementById("metaPills");
+  const micBtn = document.getElementById("micBtn");
+  const voiceStatus = document.getElementById("voiceStatus");
+  const transcriptBox = document.getElementById("transcriptBox");
+  const historyList = document.getElementById("historyList");
+  const historyCountBadge = document.getElementById("historyCountBadge");
+  const historySearchInput = document.getElementById("historySearchInput");
+  const clearSearchBtn = document.getElementById("clearSearchBtn");
+  const filterMicBtn = document.getElementById("filterMicBtn");
+  const filterVoiceStatus = document.getElementById("filterVoiceStatus");
+  const filterVoiceText = document.getElementById("filterVoiceText");
+  const filterVoiceDismiss = document.getElementById("filterVoiceDismiss");
+  const formatTabs = document.querySelectorAll(".format-tab");
+  const filterChips = document.querySelectorAll(".filter-chip");
+
+  let currentFormat = "UPCA";
+  let currentEncodedCode = "123456789104";
+  let savedItems = [];
+  let historySearchQuery = "";
+  let historyFilterFormat = "ALL";
+  let activeVoiceTarget = null; // null | "main" | "label" | "filter"
+  let recognition = null;
+  let pendingVoiceSave = null; // { format, code, label, key }
+  let lastAutoSavedKey = "";
+
+  try {
+    const stored = localStorage.getItem("upc_app_history");
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        savedItems = parsed.map(item => ({
+          format: item.format && FORMAT_CONFIG[item.format] ? item.format : "UPCA",
+          code: item.code || "",
+          label: item.label || ""
+        })).filter(item => item.code);
+      }
+    }
+  } catch (e) {}
+
+  // Check digit calculations
+  function computeUPCACheckDigit(base11) {
+    let oddSum = 0;
+    let evenSum = 0;
+    for (let i = 0; i < 11; i++) {
+      const d = parseInt(base11[i], 10);
+      if (i % 2 === 0) oddSum += d;
+      else evenSum += d;
+    }
+    const total = oddSum * 3 + evenSum;
+    return String((10 - (total % 10)) % 10);
+  }
+
+  function computeEAN13CheckDigit(base12) {
+    let sum = 0;
+    for (let i = 0; i < 12; i++) {
+      const d = parseInt(base12[i], 10);
+      sum += (i % 2 === 0) ? d : d * 3;
+    }
+    return String((10 - (sum % 10)) % 10);
+  }
+
+  function computeEAN8CheckDigit(base7) {
+    let sum = 0;
+    for (let i = 0; i < 7; i++) {
+      const d = parseInt(base7[i], 10);
+      sum += (i % 2 === 0) ? d * 3 : d;
+    }
+    return String((10 - (sum % 10)) % 10);
+  }
+
+  // Expand 7-digit UPC-E (Number System + 6 middle digits) to 11-digit UPC-A base
+  function expandUPCEToUPCABase(upce7) {
+    const ns = upce7[0];
+    const d1 = upce7[1], d2 = upce7[2], d3 = upce7[3], d4 = upce7[4], d5 = upce7[5], d6 = upce7[6];
+    if (d6 === "0" || d6 === "1" || d6 === "2") {
+      return ns + d1 + d2 + d6 + "0000" + d3 + d4 + d5;
+    } else if (d6 === "3") {
+      return ns + d1 + d2 + d3 + "00000" + d4 + d5;
+    } else if (d6 === "4") {
+      return ns + d1 + d2 + d3 + d4 + "00000" + d5;
+    } else {
+      return ns + d1 + d2 + d3 + d4 + d5 + "0000" + d6;
+    }
+  }
+
+  function computeUPCECheckDigit(upce7) {
+    const upca11 = expandUPCEToUPCABase(upce7);
+    return computeUPCACheckDigit(upca11);
+  }
+
+  function showAlert(type, message) {
+    statusAlert.className = "alert " + type;
+    statusAlert.textContent = message;
+  }
+
+  function clearAlert() {
+    statusAlert.className = "alert";
+    statusAlert.textContent = "";
+  }
+
+  function escapeXml(str) {
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function formatSpokenLabel(rawLabel) {
+    const cleaned = rawLabel.replace(/\s+/g, " ").trim().slice(0, 40);
+    if (!cleaned) return "";
+    // Capitalize first letter of each word while keeping existing all-caps acronyms intact
+    return cleaned
+      .split(" ")
+      .map(word => {
+        if (word.length > 1 && word === word.toUpperCase() && /[A-Z]/.test(word)) {
+          return word;
+        }
+        return word.charAt(0).toUpperCase() + word.slice(1);
+      })
+      .join(" ");
+  }
+
+  function parseSpokenToDigits(text) {
+    const tokens = text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/);
+    let out = "";
+    for (const token of tokens) {
+      if (!token) continue;
+      if (/^\d+$/.test(token)) {
+        out += token;
+      } else if (Object.prototype.hasOwnProperty.call(WORD_DIGITS, token)) {
+        out += WORD_DIGITS[token];
+      }
+    }
+    return out;
+  }
+
+  function parseSpokenToCode128(text) {
+    let cleaned = text.trim()
+      .replace(/(dash|hyphen|minus)/gi, "-")
+      .replace(/(underscore)/gi, "_")
+      .replace(/(slash|forward slash)/gi, "/")
+      .replace(/(dot|period|point)/gi, ".")
+      .replace(/(space)/gi, " ");
+    cleaned = cleaned.replace(/[^ -~]/g, "");
+    return cleaned.toUpperCase();
+  }
+
+  // Split main dictation transcript on "save as" so trailing text sets the optional item label
+  function splitDictationAndSaveAs(transcript) {
+    const match = transcript.match(/(?:^|\s+)save\s+as(?:\s+(.*))?$/i);
+    if (!match) {
+      return { codePart: transcript.trim(), hasSaveAs: false, labelPart: "" };
+    }
+    const splitIndex = match.index;
+    const codePart = transcript.slice(0, splitIndex).trim();
+    const rawLabel = match[1] ? match[1] : "";
+    const labelPart = formatSpokenLabel(rawLabel);
+    return { codePart, hasSaveAs: true, labelPart };
+  }
+
+  // Parse spoken text for saved history filtering
+  function parseSpokenHistoryFilter(text) {
+    const lower = text.toLowerCase().trim();
+    if (!lower) return { reset: false, format: null, query: "" };
+
+    if (/^(clear|reset|show all|all barcodes|clear filter|clear filters|reset filter|reset filters)$/.test(lower)) {
+      return { reset: true, format: "ALL", query: "" };
+    }
+
+    let detectedFormat = null;
+    let remaining = lower;
+
+    const formatMatchers = [
+      { format: "ALL", regex: /(all formats|all types)/g },
+      { format: "UPCA", regex: /(upc[\s-]?a|u p c a)/g },
+      { format: "EAN13", regex: /(ean[\s-]?13|ean thirteen|e a n 13)/g },
+      { format: "EAN8", regex: /(ean[\s-]?8|ean eight|e a n 8)/g },
+      { format: "UPCE", regex: /(upc[\s-]?e|u p c e)/g },
+      { format: "CODE128", regex: /(code[\s-]?128|code one twenty eight|code one two eight|costco item number)/g }
+    ];
+
+    for (const m of formatMatchers) {
+      if (m.regex.test(remaining)) {
+        detectedFormat = m.format;
+        remaining = remaining.replace(m.regex, " ").trim();
+        break;
+      }
+    }
+
+    remaining = remaining
+      .replace(/^(filter by|search for|search|find|show|only|format)\s+/i, "")
+      .replace(/(dash|hyphen)/gi, "-")
+      .trim();
+
+    if (!remaining) {
+      return { reset: false, format: detectedFormat, query: "" };
+    }
+
+    const tokens = remaining.split(/\s+/);
+    let rebuilt = "";
+
+    for (const tok of tokens) {
+      const bare = tok.replace(/[^a-z0-9-]/g, "");
+      if (!bare) continue;
+      if (/^\d+$/.test(bare)) {
+        rebuilt += bare;
+      } else if (Object.prototype.hasOwnProperty.call(WORD_DIGITS, bare)) {
+        rebuilt += WORD_DIGITS[bare];
+      } else {
+        if (rebuilt && !rebuilt.endsWith("-") && !bare.startsWith("-")) {
+          rebuilt += " ";
+        }
+        rebuilt += bare;
+      }
+    }
+
+    return { reset: false, format: detectedFormat, query: rebuilt.trim() };
+  }
+
+  function renderMetaPills(pills) {
+    metaPills.innerHTML = pills
+      .map(p => `<div class="pill">${p.label}: <strong>${escapeXml(p.value)}</strong></div>`)
+      .join("");
+  }
+
+  // SVG Renderers per format
+  function renderUPCASVG(upc12, labelText) {
+    const moduleWidth = 3;
+    const quietModules = 9;
+    const totalModules = quietModules + 3 + 42 + 5 + 42 + 3 + quietModules; // 113
+    const width = totalModules * moduleWidth; // 339
+    const topMargin = labelText ? 28 : 12;
+    const barHeight = 115;
+    const guardExtension = 14;
+    const height = topMargin + barHeight + 36;
+
+    barcodeSvg.setAttribute("width", width);
+    barcodeSvg.setAttribute("height", height);
+    barcodeSvg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+
+    let svgParts = [`<rect x="0" y="0" width="${width}" height="${height}" fill="#ffffff"/>`];
+    if (labelText) {
+      svgParts.push(`<text x="${width / 2}" y="20" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="bold" fill="#000000">${escapeXml(labelText)}</text>`);
+    }
+
+    let cursor = quietModules;
+    function drawPattern(bits, isGuard) {
+      const h = isGuard ? barHeight + guardExtension : barHeight;
+      for (let i = 0; i < bits.length; i++) {
+        if (bits[i] === "1") {
+          svgParts.push(`<rect x="${cursor * moduleWidth}" y="${topMargin}" width="${moduleWidth}" height="${h}" fill="#000000"/>`);
+        }
+        cursor++;
+      }
+    }
+
+    drawPattern("101", true);
+    for (let i = 0; i < 6; i++) drawPattern(L_CODES[parseInt(upc12[i], 10)], false);
+    drawPattern("01010", true);
+    for (let i = 6; i < 12; i++) drawPattern(R_CODES[parseInt(upc12[i], 10)], false);
+    drawPattern("101", true);
+
+    const textY = topMargin + barHeight + 22;
+    svgParts.push(`<text x="${(quietModules - 3) * moduleWidth}" y="${textY}" text-anchor="middle" font-family="Courier New, monospace" font-size="18" font-weight="bold" fill="#000000">${upc12[0]}</text>`);
+    for (let i = 1; i <= 5; i++) {
+      const centerModule = quietModules + 3 + (i * 7) + 3.5;
+      svgParts.push(`<text x="${centerModule * moduleWidth}" y="${textY}" text-anchor="middle" font-family="Courier New, monospace" font-size="18" font-weight="bold" fill="#000000">${upc12[i]}</text>`);
+    }
+    for (let i = 6; i <= 10; i++) {
+      const rightIndex = i - 6;
+      const centerModule = quietModules + 3 + 42 + 5 + (rightIndex * 7) + 3.5;
+      svgParts.push(`<text x="${centerModule * moduleWidth}" y="${textY}" text-anchor="middle" font-family="Courier New, monospace" font-size="18" font-weight="bold" fill="#000000">${upc12[i]}</text>`);
+    }
+    svgParts.push(`<text x="${(totalModules - quietModules + 3) * moduleWidth}" y="${textY}" text-anchor="middle" font-family="Courier New, monospace" font-size="18" font-weight="bold" fill="#000000">${upc12[11]}</text>`);
+
+    barcodeSvg.innerHTML = svgParts.join("");
+  }
+
+  function renderEAN13SVG(ean13, labelText) {
+    const moduleWidth = 3;
+    const quietLeft = 11;
+    const quietRight = 9;
+    const totalModules = quietLeft + 3 + 42 + 5 + 42 + 3 + quietRight; // 115
+    const width = totalModules * moduleWidth; // 345
+    const topMargin = labelText ? 28 : 12;
+    const barHeight = 115;
+    const guardExtension = 14;
+    const height = topMargin + barHeight + 36;
+
+    barcodeSvg.setAttribute("width", width);
+    barcodeSvg.setAttribute("height", height);
+    barcodeSvg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+
+    let svgParts = [`<rect x="0" y="0" width="${width}" height="${height}" fill="#ffffff"/>`];
+    if (labelText) {
+      svgParts.push(`<text x="${width / 2}" y="20" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="bold" fill="#000000">${escapeXml(labelText)}</text>`);
+    }
+
+    let cursor = quietLeft;
+    function drawPattern(bits, isGuard) {
+      const h = isGuard ? barHeight + guardExtension : barHeight;
+      for (let i = 0; i < bits.length; i++) {
+        if (bits[i] === "1") {
+          svgParts.push(`<rect x="${cursor * moduleWidth}" y="${topMargin}" width="${moduleWidth}" height="${h}" fill="#000000"/>`);
+        }
+        cursor++;
+      }
+    }
+
+    const firstDigit = parseInt(ean13[0], 10);
+    const parityPattern = EAN13_PARITY[firstDigit];
+
+    drawPattern("101", true);
+    for (let i = 0; i < 6; i++) {
+      const d = parseInt(ean13[i + 1], 10);
+      drawPattern(parityPattern[i] === "L" ? L_CODES[d] : G_CODES[d], false);
+    }
+    drawPattern("01010", true);
+    for (let i = 7; i < 13; i++) {
+      const d = parseInt(ean13[i], 10);
+      drawPattern(R_CODES[d], false);
+    }
+    drawPattern("101", true);
+
+    const textY = topMargin + barHeight + 22;
+    svgParts.push(`<text x="${(quietLeft - 4) * moduleWidth}" y="${textY}" text-anchor="middle" font-family="Courier New, monospace" font-size="18" font-weight="bold" fill="#000000">${ean13[0]}</text>`);
+    for (let i = 0; i < 6; i++) {
+      const centerModule = quietLeft + 3 + (i * 7) + 3.5;
+      svgParts.push(`<text x="${centerModule * moduleWidth}" y="${textY}" text-anchor="middle" font-family="Courier New, monospace" font-size="18" font-weight="bold" fill="#000000">${ean13[i + 1]}</text>`);
+    }
+    for (let i = 0; i < 6; i++) {
+      const centerModule = quietLeft + 3 + 42 + 5 + (i * 7) + 3.5;
+      svgParts.push(`<text x="${centerModule * moduleWidth}" y="${textY}" text-anchor="middle" font-family="Courier New, monospace" font-size="18" font-weight="bold" fill="#000000">${ean13[i + 7]}</text>`);
+    }
+
+    barcodeSvg.innerHTML = svgParts.join("");
+  }
+
+  function renderEAN8SVG(ean8, labelText) {
+    const moduleWidth = 3;
+    const quietModules = 9;
+    const totalModules = quietModules + 3 + 28 + 5 + 28 + 3 + quietModules; // 85
+    const width = totalModules * moduleWidth; // 255
+    const topMargin = labelText ? 28 : 12;
+    const barHeight = 105;
+    const guardExtension = 14;
+    const height = topMargin + barHeight + 36;
+
+    barcodeSvg.setAttribute("width", width);
+    barcodeSvg.setAttribute("height", height);
+    barcodeSvg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+
+    let svgParts = [`<rect x="0" y="0" width="${width}" height="${height}" fill="#ffffff"/>`];
+    if (labelText) {
+      svgParts.push(`<text x="${width / 2}" y="20" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="bold" fill="#000000">${escapeXml(labelText)}</text>`);
+    }
+
+    let cursor = quietModules;
+    function drawPattern(bits, isGuard) {
+      const h = isGuard ? barHeight + guardExtension : barHeight;
+      for (let i = 0; i < bits.length; i++) {
+        if (bits[i] === "1") {
+          svgParts.push(`<rect x="${cursor * moduleWidth}" y="${topMargin}" width="${moduleWidth}" height="${h}" fill="#000000"/>`);
+        }
+        cursor++;
+      }
+    }
+
+    drawPattern("101", true);
+    for (let i = 0; i < 4; i++) drawPattern(L_CODES[parseInt(ean8[i], 10)], false);
+    drawPattern("01010", true);
+    for (let i = 4; i < 8; i++) drawPattern(R_CODES[parseInt(ean8[i], 10)], false);
+    drawPattern("101", true);
+
+    const textY = topMargin + barHeight + 22;
+    for (let i = 0; i < 4; i++) {
+      const centerModule = quietModules + 3 + (i * 7) + 3.5;
+      svgParts.push(`<text x="${centerModule * moduleWidth}" y="${textY}" text-anchor="middle" font-family="Courier New, monospace" font-size="18" font-weight="bold" fill="#000000">${ean8[i]}</text>`);
+    }
+    for (let i = 0; i < 4; i++) {
+      const centerModule = quietModules + 3 + 28 + 5 + (i * 7) + 3.5;
+      svgParts.push(`<text x="${centerModule * moduleWidth}" y="${textY}" text-anchor="middle" font-family="Courier New, monospace" font-size="18" font-weight="bold" fill="#000000">${ean8[i + 4]}</text>`);
+    }
+
+    barcodeSvg.innerHTML = svgParts.join("");
+  }
+
+  function renderUPCESVG(upce8, labelText) {
+    const moduleWidth = 3;
+    const quietModules = 9;
+    const totalModules = quietModules + 3 + 42 + 6 + quietModules; // 69
+    const width = totalModules * moduleWidth; // 207
+    const topMargin = labelText ? 28 : 12;
+    const barHeight = 105;
+    const guardExtension = 14;
+    const height = topMargin + barHeight + 36;
+
+    barcodeSvg.setAttribute("width", width);
+    barcodeSvg.setAttribute("height", height);
+    barcodeSvg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+
+    let svgParts = [`<rect x="0" y="0" width="${width}" height="${height}" fill="#ffffff"/>`];
+    if (labelText) {
+      svgParts.push(`<text x="${width / 2}" y="20" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="bold" fill="#000000">${escapeXml(labelText)}</text>`);
+    }
+
+    let cursor = quietModules;
+    function drawPattern(bits, isGuard) {
+      const h = isGuard ? barHeight + guardExtension : barHeight;
+      for (let i = 0; i < bits.length; i++) {
+        if (bits[i] === "1") {
+          svgParts.push(`<rect x="${cursor * moduleWidth}" y="${topMargin}" width="${moduleWidth}" height="${h}" fill="#000000"/>`);
+        }
+        cursor++;
+      }
+    }
+
+    const ns = upce8[0];
+    const checkDigit = parseInt(upce8[7], 10);
+    const baseParity = UPCE_PARITY_NS0[checkDigit];
+
+    drawPattern("101", true);
+    for (let i = 0; i < 6; i++) {
+      const d = parseInt(upce8[i + 1], 10);
+      let parity = baseParity[i];
+      if (ns === "1") {
+        parity = (parity === "L") ? "G" : "L";
+      }
+      drawPattern(parity === "L" ? L_CODES[d] : G_CODES[d], false);
+    }
+    drawPattern("010101", true);
+
+    const textY = topMargin + barHeight + 22;
+    svgParts.push(`<text x="${(quietModules - 3) * moduleWidth}" y="${textY}" text-anchor="middle" font-family="Courier New, monospace" font-size="18" font-weight="bold" fill="#000000">${upce8[0]}</text>`);
+    for (let i = 0; i < 6; i++) {
+      const centerModule = quietModules + 3 + (i * 7) + 3.5;
+      svgParts.push(`<text x="${centerModule * moduleWidth}" y="${textY}" text-anchor="middle" font-family="Courier New, monospace" font-size="18" font-weight="bold" fill="#000000">${upce8[i + 1]}</text>`);
+    }
+    svgParts.push(`<text x="${(totalModules - quietModules + 3) * moduleWidth}" y="${textY}" text-anchor="middle" font-family="Courier New, monospace" font-size="18" font-weight="bold" fill="#000000">${upce8[7]}</text>`);
+
+    barcodeSvg.innerHTML = svgParts.join("");
+  }
+
+  function renderCode128SVG(text, labelText) {
+    const startCodeB = 104;
+    const stopCode = 106;
+    const codes = [startCodeB];
+    let checksum = startCodeB;
+
+    for (let i = 0; i < text.length; i++) {
+      const charCode = text.charCodeAt(i);
+      const val = (charCode >= 32 && charCode <= 126) ? (charCode - 32) : 0;
+      codes.push(val);
+      checksum += val * (i + 1);
+    }
+    const checkChar = checksum % 103;
+    codes.push(checkChar);
+    codes.push(stopCode);
+
+    const moduleWidth = text.length > 20 ? 2 : 2.5;
+    const quietModules = 10;
+    const dataModules = (codes.length - 1) * 11 + 13;
+    const totalModules = quietModules + dataModules + quietModules;
+    const width = Math.max(240, Math.round(totalModules * moduleWidth));
+    const topMargin = labelText ? 28 : 12;
+    const barHeight = 105;
+    const height = topMargin + barHeight + 36;
+
+    barcodeSvg.setAttribute("width", width);
+    barcodeSvg.setAttribute("height", height);
+    barcodeSvg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+
+    let svgParts = [`<rect x="0" y="0" width="${width}" height="${height}" fill="#ffffff"/>`];
+    if (labelText) {
+      svgParts.push(`<text x="${width / 2}" y="20" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="bold" fill="#000000">${escapeXml(labelText)}</text>`);
+    }
+
+    const contentPixelWidth = dataModules * moduleWidth;
+    let cursorX = (width - contentPixelWidth) / 2;
+
+    for (let c = 0; c < codes.length; c++) {
+      const pattern = CODE128_PATTERNS[codes[c]];
+      for (let b = 0; b < pattern.length; b++) {
+        if (pattern[b] === "1") {
+          svgParts.push(`<rect x="${cursorX.toFixed(2)}" y="${topMargin}" width="${moduleWidth}" height="${barHeight}" fill="#000000"/>`);
+        }
+        cursorX += moduleWidth;
+      }
+    }
+
+    const textY = topMargin + barHeight + 22;
+    svgParts.push(`<text x="${width / 2}" y="${textY}" text-anchor="middle" font-family="Courier New, monospace" font-size="17" font-weight="bold" fill="#000000">${escapeXml(text)}</text>`);
+
+    barcodeSvg.innerHTML = svgParts.join("");
+    return checkChar;
+  }
+
+  // Input validation and processing per format
+  function processInput(rawValue) {
+    clearAlert();
+    const labelText = labelInput.value.trim();
+
+    if (currentFormat === "CODE128") {
+      const cleaned = rawValue.replace(/[^ -~]/g, "");
+      if (cleaned.length === 0) {
+        showAlert("info", "Enter any text, numbers, or symbols (ASCII), tap the microphone, or generate a random Code 128.");
+        return;
+      }
+      currentEncodedCode = cleaned;
+      const checkVal = renderCode128SVG(currentEncodedCode, labelText);
+      renderMetaPills([
+        { label: "Format", value: "Code 128B" },
+        { label: "Encoded Text", value: currentEncodedCode },
+        { label: "Length", value: `${currentEncodedCode.length} chars` },
+        { label: "Mod-103 Check", value: String(checkVal) }
+      ]);
+      return;
+    }
+
+    const digitsOnly = rawValue.replace(/\D/g, "");
+    if (digitsOnly.length === 0) {
+      showAlert("info", `Enter digits for ${FORMAT_CONFIG[currentFormat].name}, tap the microphone, or generate a random valid code.`);
+      return;
+    }
+
+    if (currentFormat === "UPCA") {
+      let base11 = "";
+      if (digitsOnly.length < 11) {
+        base11 = digitsOnly.padEnd(11, "0");
+        showAlert("info", `Padded ${digitsOnly.length} digit(s) with trailing zeros to 11-digit base (${base11}).`);
+      } else if (digitsOnly.length === 11) {
+        base11 = digitsOnly;
+      } else if (digitsOnly.length === 12) {
+        base11 = digitsOnly.slice(0, 11);
+        const expected = computeUPCACheckDigit(base11);
+        if (digitsOnly[11] !== expected) {
+          showAlert("warning", `Entered 12th check digit (${digitsOnly[11]}) was invalid for ${base11}. Corrected to ${expected}.`);
+        }
+      } else {
+        base11 = digitsOnly.slice(0, 11);
+        showAlert("warning", `Input had ${digitsOnly.length} digits. Trimmed to first 11 digits (${base11}) for UPC-A.`);
+      }
+      const checkDigit = computeUPCACheckDigit(base11);
+      currentEncodedCode = base11 + checkDigit;
+      renderUPCASVG(currentEncodedCode, labelText);
+      renderMetaPills([
+        { label: "Format", value: "UPC-A" },
+        { label: "Full Code", value: currentEncodedCode },
+        { label: "11-Digit Base", value: base11 },
+        { label: "Check Digit", value: checkDigit }
+      ]);
+    } else if (currentFormat === "EAN13") {
+      let base12 = "";
+      if (digitsOnly.length < 12) {
+        base12 = digitsOnly.padEnd(12, "0");
+        showAlert("info", `Padded ${digitsOnly.length} digit(s) with trailing zeros to 12-digit base (${base12}).`);
+      } else if (digitsOnly.length === 12) {
+        base12 = digitsOnly;
+      } else if (digitsOnly.length === 13) {
+        base12 = digitsOnly.slice(0, 12);
+        const expected = computeEAN13CheckDigit(base12);
+        if (digitsOnly[12] !== expected) {
+          showAlert("warning", `Entered 13th check digit (${digitsOnly[12]}) was invalid for ${base12}. Corrected to ${expected}.`);
+        }
+      } else {
+        base12 = digitsOnly.slice(0, 12);
+        showAlert("warning", `Input had ${digitsOnly.length} digits. Trimmed to first 12 digits (${base12}) for EAN-13.`);
+      }
+      const checkDigit = computeEAN13CheckDigit(base12);
+      currentEncodedCode = base12 + checkDigit;
+      renderEAN13SVG(currentEncodedCode, labelText);
+      renderMetaPills([
+        { label: "Format", value: "EAN-13" },
+        { label: "Full Code", value: currentEncodedCode },
+        { label: "12-Digit Base", value: base12 },
+        { label: "Check Digit", value: checkDigit }
+      ]);
+    } else if (currentFormat === "EAN8") {
+      let base7 = "";
+      if (digitsOnly.length < 7) {
+        base7 = digitsOnly.padEnd(7, "0");
+        showAlert("info", `Padded ${digitsOnly.length} digit(s) with trailing zeros to 7-digit base (${base7}).`);
+      } else if (digitsOnly.length === 7) {
+        base7 = digitsOnly;
+      } else if (digitsOnly.length === 8) {
+        base7 = digitsOnly.slice(0, 7);
+        const expected = computeEAN8CheckDigit(base7);
+        if (digitsOnly[7] !== expected) {
+          showAlert("warning", `Entered 8th check digit (${digitsOnly[7]}) was invalid for ${base7}. Corrected to ${expected}.`);
+        }
+      } else {
+        base7 = digitsOnly.slice(0, 7);
+        showAlert("warning", `Input had ${digitsOnly.length} digits. Trimmed to first 7 digits (${base7}) for EAN-8.`);
+      }
+      const checkDigit = computeEAN8CheckDigit(base7);
+      currentEncodedCode = base7 + checkDigit;
+      renderEAN8SVG(currentEncodedCode, labelText);
+      renderMetaPills([
+        { label: "Format", value: "EAN-8" },
+        { label: "Full Code", value: currentEncodedCode },
+        { label: "7-Digit Base", value: base7 },
+        { label: "Check Digit", value: checkDigit }
+      ]);
+    } else if (currentFormat === "UPCE") {
+      let normalized = digitsOnly;
+      let notes = [];
+      if (normalized.length === 6) {
+        normalized = "0" + normalized;
+        notes.push("Prepended Number System 0");
+      } else if (normalized.length < 6) {
+        normalized = "0" + normalized.padEnd(6, "0");
+        notes.push("Prepended Number System 0 and padded to 7 digits");
+      }
+
+      if (normalized[0] !== "0" && normalized[0] !== "1") {
+        notes.push(`UPC-E requires leading 0 or 1 (changed ${normalized[0]} to 0)`);
+        normalized = "0" + normalized.slice(1);
+      }
+
+      const base7 = normalized.slice(0, 7);
+      const checkDigit = computeUPCECheckDigit(base7);
+
+      if (digitsOnly.length === 8 && digitsOnly[7] !== checkDigit) {
+        notes.push(`Corrected 8th check digit from ${digitsOnly[7]} to ${checkDigit}`);
+      } else if (digitsOnly.length > 8) {
+        notes.push(`Trimmed extra digits to 7-digit base (${base7})`);
+      }
+
+      if (notes.length > 0) {
+        showAlert("warning", notes.join(". ") + ".");
+      }
+
+      currentEncodedCode = base7 + checkDigit;
+      const expandedUPCA = expandUPCEToUPCABase(base7) + checkDigit;
+      renderUPCESVG(currentEncodedCode, labelText);
+      renderMetaPills([
+        { label: "Format", value: "UPC-E" },
+        { label: "Full UPC-E", value: currentEncodedCode },
+        { label: "Expanded UPC-A", value: expandedUPCA },
+        { label: "Check Digit", value: checkDigit }
+      ]);
+    }
+  }
+
+  function switchFormat(newFormat, customValue) {
+    if (!FORMAT_CONFIG[newFormat]) return;
+    currentFormat = newFormat;
+    const cfg = FORMAT_CONFIG[newFormat];
+
+    formatTabs.forEach(tab => {
+      tab.classList.toggle("active", tab.dataset.format === newFormat);
+    });
+
+    inputLabel.textContent = cfg.label;
+    upcInput.placeholder = cfg.placeholder;
+    upcInput.maxLength = cfg.maxLength;
+    upcInput.setAttribute("inputmode", cfg.inputMode);
+
+    if (activeVoiceTarget !== "main") {
+      voiceStatus.textContent = cfg.voiceHint;
+    }
+
+    if (customValue !== undefined) {
+      upcInput.value = customValue;
+    } else {
+      upcInput.value = cfg.defaultVal;
+    }
+    processInput(upcInput.value);
+  }
+
+  function generateRandomCode() {
+    if (currentFormat === "UPCA") {
+      let base11 = "0";
+      for (let i = 1; i < 11; i++) base11 += Math.floor(Math.random() * 10);
+      const full = base11 + computeUPCACheckDigit(base11);
+      upcInput.value = full;
+      processInput(full);
+    } else if (currentFormat === "EAN13") {
+      let base12 = String(Math.floor(Math.random() * 9) + 1);
+      for (let i = 1; i < 12; i++) base12 += Math.floor(Math.random() * 10);
+      const full = base12 + computeEAN13CheckDigit(base12);
+      upcInput.value = full;
+      processInput(full);
+    } else if (currentFormat === "EAN8") {
+      let base7 = String(Math.floor(Math.random() * 9) + 1);
+      for (let i = 1; i < 7; i++) base7 += Math.floor(Math.random() * 10);
+      const full = base7 + computeEAN8CheckDigit(base7);
+      upcInput.value = full;
+      processInput(full);
+    } else if (currentFormat === "UPCE") {
+      const ns = Math.random() < 0.8 ? "0" : "1";
+      let body = "";
+      for (let i = 0; i < 6; i++) body += Math.floor(Math.random() * 10);
+      const base7 = ns + body;
+      const full = base7 + computeUPCECheckDigit(base7);
+      upcInput.value = full;
+      processInput(full);
+    } else if (currentFormat === "CODE128") {
+      const prefixes = ["SKU", "BOX", "LOT", "INV", "PKG"];
+      const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+      const num = Math.floor(10000 + Math.random() * 90000);
+      const letter = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+      const full = `${prefix}-${num}-${letter}`;
+      upcInput.value = full;
+      processInput(full);
+    }
+  }
+
+  function downloadSVG() {
+    const serializer = new XMLSerializer();
+    const svgString = serializer.serializeToString(barcodeSvg);
+    const blob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const safeCode = currentEncodedCode.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${currentFormat}-${safeCode}.svg`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function downloadPNG() {
+    const serializer = new XMLSerializer();
+    const svgString = serializer.serializeToString(barcodeSvg);
+    const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(svgBlob);
+    const safeCode = currentEncodedCode.replace(/[^a-zA-Z0-9_-]/g, "_");
+
+    const img = new Image();
+    img.onload = function() {
+      const scale = 3;
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+
+      canvas.toBlob(function(pngBlob) {
+        const pngUrl = URL.createObjectURL(pngBlob);
+        const a = document.createElement("a");
+        a.href = pngUrl;
+        a.download = `${currentFormat}-${safeCode}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(pngUrl);
+      }, "image/png");
+    };
+    img.src = url;
+  }
+
+  function commitPendingVoiceSave() {
+    if (!pendingVoiceSave) return;
+    const { format, code, label, key } = pendingVoiceSave;
+    pendingVoiceSave = null;
+    if (!code) return;
+    if (key && key === lastAutoSavedKey) return;
+    lastAutoSavedKey = key;
+    saveToHistory(format, code, label);
+    const fmtName = FORMAT_CONFIG[format] ? FORMAT_CONFIG[format].name : format;
+    const isHiddenByFilter =
+      (historyFilterFormat !== "ALL" && historyFilterFormat !== format) ||
+      (historySearchQuery.trim() &&
+        !code.toLowerCase().includes(historySearchQuery.trim().toLowerCase()) &&
+        !((label || "").toLowerCase().includes(historySearchQuery.trim().toLowerCase())) &&
+        !fmtName.toLowerCase().includes(historySearchQuery.trim().toLowerCase()));
+
+    if (isHiddenByFilter) {
+      showAlert("info", `Saved ${fmtName} (${code})${label ? ` as "${label}"` : ""}. Note: Hidden by active filter.`);
+    } else {
+      showAlert("info", `Saved ${fmtName} (${code})${label ? ` as "${label}"` : ""} to list.`);
+    }
+  }
+
+  function saveToHistory(format, code, label) {
+    savedItems = savedItems.filter(item => !(item.code === code && item.format === format));
+    savedItems.unshift({ format, code, label: label || "" });
+    if (savedItems.length > 40) savedItems.pop();
+    try {
+      localStorage.setItem("upc_app_history", JSON.stringify(savedItems));
+    } catch (e) {}
+    renderHistory();
+  }
+
+  function resetHistoryFilters() {
+    historySearchQuery = "";
+    historyFilterFormat = "ALL";
+    historySearchInput.value = "";
+    clearSearchBtn.classList.remove("visible");
+    filterVoiceStatus.classList.remove("visible", "listening");
+    filterChips.forEach(chip => {
+      chip.classList.toggle("active", chip.dataset.filterFormat === "ALL");
+    });
+    renderHistory();
+  }
+
+  function setHistoryFilterFormat(formatKey) {
+    if (!formatKey) return;
+    historyFilterFormat = formatKey;
+    filterChips.forEach(chip => {
+      chip.classList.toggle("active", chip.dataset.filterFormat === formatKey);
+    });
+  }
+
+  function setHistorySearchQuery(q) {
+    historySearchQuery = q;
+    historySearchInput.value = q;
+    clearSearchBtn.classList.toggle("visible", q.length > 0);
+  }
+
+  function renderHistory() {
+    const counts = { ALL: savedItems.length, UPCA: 0, EAN13: 0, EAN8: 0, UPCE: 0, CODE128: 0 };
+    savedItems.forEach(item => {
+      const fmt = item.format && counts.hasOwnProperty(item.format) ? item.format : "UPCA";
+      counts[fmt]++;
+    });
+
+    Object.keys(counts).forEach(fmtKey => {
+      const countEl = document.querySelector(`.chip-count[data-count-for="${fmtKey}"]`);
+      if (countEl) countEl.textContent = counts[fmtKey];
+    });
+
+    const query = historySearchQuery.trim().toLowerCase();
+    const filteredItems = savedItems.filter(item => {
+      const fmt = item.format || "UPCA";
+      if (historyFilterFormat !== "ALL" && fmt !== historyFilterFormat) {
+        return false;
+      }
+      if (query) {
+        const formatName = (FORMAT_CONFIG[fmt] ? FORMAT_CONFIG[fmt].name : fmt).toLowerCase();
+        const codeMatch = item.code.toLowerCase().includes(query);
+        const labelMatch = (item.label || "").toLowerCase().includes(query);
+        const formatMatch = formatName.includes(query) || fmt.toLowerCase().includes(query);
+        return codeMatch || labelMatch || formatMatch;
+      }
+      return true;
+    });
+
+    const isFiltered = historyFilterFormat !== "ALL" || query.length > 0;
+    historyCountBadge.textContent = isFiltered
+      ? `Showing ${filteredItems.length} of ${savedItems.length}`
+      : `${savedItems.length}`;
+
+    if (savedItems.length === 0) {
+      historyList.innerHTML = `<div class="empty-history">No saved barcodes yet. Click "Save to List" to store barcodes here.</div>`;
+      return;
+    }
+
+    if (filteredItems.length === 0) {
+      historyList.innerHTML = "";
+      const emptyBox = document.createElement("div");
+      emptyBox.className = "empty-history";
+      emptyBox.textContent = "No saved barcodes match your current filter.";
+
+      const resetBtn = document.createElement("button");
+      resetBtn.type = "button";
+      resetBtn.className = "btn btn-sm";
+      resetBtn.textContent = "Reset Filters";
+      resetBtn.onclick = resetHistoryFilters;
+
+      emptyBox.appendChild(resetBtn);
+      historyList.appendChild(emptyBox);
+      return;
+    }
+
+    historyList.innerHTML = "";
+    filteredItems.forEach(item => {
+      const fmt = item.format || "UPCA";
+      const row = document.createElement("div");
+      row.className = "history-item";
+
+      const info = document.createElement("div");
+      const codeRow = document.createElement("div");
+      codeRow.className = "history-code-row";
+
+      const badge = document.createElement("span");
+      badge.className = "format-badge";
+      badge.textContent = FORMAT_CONFIG[fmt] ? FORMAT_CONFIG[fmt].name : fmt;
+      codeRow.appendChild(badge);
+
+      const codeSpan = document.createElement("span");
+      codeSpan.className = "history-code";
+      codeSpan.textContent = item.code;
+      codeRow.appendChild(codeSpan);
+      info.appendChild(codeRow);
+
+      if (item.label) {
+        const lblSpan = document.createElement("span");
+        lblSpan.className = "history-label";
+        lblSpan.textContent = item.label;
+        info.appendChild(lblSpan);
+      }
+
+      const btns = document.createElement("div");
+      btns.className = "history-btns";
+
+      const loadBtn = document.createElement("button");
+      loadBtn.className = "btn btn-sm";
+      loadBtn.textContent = "Load";
+      loadBtn.onclick = () => {
+        labelInput.value = item.label || "";
+        switchFormat(fmt, item.code);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      };
+
+      const delBtn = document.createElement("button");
+      delBtn.className = "btn btn-sm";
+      delBtn.textContent = "Remove";
+      delBtn.onclick = () => {
+        const realIdx = savedItems.indexOf(item);
+        if (realIdx !== -1) {
+          savedItems.splice(realIdx, 1);
+          try {
+            localStorage.setItem("upc_app_history", JSON.stringify(savedItems));
+          } catch (e) {}
+          renderHistory();
+        }
+      };
+
+      btns.appendChild(loadBtn);
+      btns.appendChild(delBtn);
+
+      row.appendChild(info);
+      row.appendChild(btns);
+      historyList.appendChild(row);
+    });
+  }
+
+  // Event Listeners
+  formatTabs.forEach(tab => {
+    tab.addEventListener("click", () => {
+      switchFormat(tab.dataset.format);
+    });
+  });
+
+  upcInput.addEventListener("input", () => processInput(upcInput.value));
+  labelInput.addEventListener("input", () => processInput(upcInput.value));
+  document.getElementById("randomBtn").addEventListener("click", generateRandomCode);
+  document.getElementById("clearBtn").addEventListener("click", () => {
+    upcInput.value = "";
+    labelInput.value = "";
+    upcInput.focus();
+    clearAlert();
+  });
+  document.getElementById("downloadPngBtn").addEventListener("click", downloadPNG);
+  document.getElementById("downloadSvgBtn").addEventListener("click", downloadSVG);
+  document.getElementById("printBtn").addEventListener("click", () => window.print());
+  document.getElementById("saveHistoryBtn").addEventListener("click", () => {
+    if (!currentEncodedCode) return;
+    saveToHistory(currentFormat, currentEncodedCode, labelInput.value.trim());
+    const fmtName = FORMAT_CONFIG[currentFormat].name;
+    const isHiddenByFilter =
+      (historyFilterFormat !== "ALL" && historyFilterFormat !== currentFormat) ||
+      (historySearchQuery.trim() &&
+        !currentEncodedCode.toLowerCase().includes(historySearchQuery.trim().toLowerCase()) &&
+        !(labelInput.value.trim().toLowerCase().includes(historySearchQuery.trim().toLowerCase())) &&
+        !fmtName.toLowerCase().includes(historySearchQuery.trim().toLowerCase()));
+
+    if (isHiddenByFilter) {
+      showAlert("info", `Saved ${fmtName} (${currentEncodedCode}). Note: It is hidden by your active Saved Barcodes filter.`);
+    } else {
+      showAlert("info", `Saved ${fmtName} (${currentEncodedCode}) to your list.`);
+    }
+  });
+  document.getElementById("copyBtn").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(currentEncodedCode);
+      showAlert("info", `Copied ${currentEncodedCode} to clipboard.`);
+    } catch (e) {
+      showAlert("info", `Code: ${currentEncodedCode}`);
+    }
+  });
+  document.getElementById("clearHistoryBtn").addEventListener("click", () => {
+    savedItems = [];
+    try {
+      localStorage.removeItem("upc_app_history");
+    } catch (e) {}
+    resetHistoryFilters();
+  });
+
+  // Saved History Filter & Label Voice Dismiss Listeners
+  historySearchInput.addEventListener("input", () => {
+    historySearchQuery = historySearchInput.value;
+    clearSearchBtn.classList.toggle("visible", historySearchQuery.length > 0);
+    renderHistory();
+  });
+
+  clearSearchBtn.addEventListener("click", () => {
+    historySearchQuery = "";
+    historySearchInput.value = "";
+    clearSearchBtn.classList.remove("visible");
+    historySearchInput.focus();
+    renderHistory();
+  });
+
+  labelVoiceDismiss.addEventListener("click", () => {
+    labelVoiceStatus.classList.remove("visible", "listening");
+  });
+
+  filterVoiceDismiss.addEventListener("click", () => {
+    filterVoiceStatus.classList.remove("visible", "listening");
+  });
+
+  filterChips.forEach(chip => {
+    chip.addEventListener("click", () => {
+      historyFilterFormat = chip.dataset.filterFormat;
+      filterChips.forEach(c => c.classList.toggle("active", c === chip));
+      renderHistory();
+    });
+  });
+
+  // Web Speech API Setup (shared cleanly across Main Barcode, Item Label, & Saved History Filter)
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    micBtn.disabled = true;
+    labelMicBtn.disabled = true;
+    filterMicBtn.disabled = true;
+    voiceStatus.textContent = "Voice dictation is not supported in this browser. Use manual entry or Chrome/Edge/Safari.";
+  } else {
+    recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+
+    function startVoiceFor(target) {
+      if (activeVoiceTarget === target) {
+        recognition.stop();
+        return;
+      }
+      if (activeVoiceTarget !== null) {
+        const nextTarget = target;
+        recognition.onend = () => {
+          resetVoiceUI();
+          restoreDefaultOnEnd();
+          startVoiceFor(nextTarget);
+        };
+        recognition.stop();
+        return;
+      }
+      activeVoiceTarget = target;
+      try {
+        recognition.start();
+      } catch (err) {
+        activeVoiceTarget = null;
+      }
+    }
+
+    function resetVoiceUI() {
+      micBtn.classList.remove("listening");
+      voiceStatus.classList.remove("active");
+      voiceStatus.textContent = FORMAT_CONFIG[currentFormat].voiceHint;
+      labelMicBtn.classList.remove("listening");
+      labelVoiceStatus.classList.remove("listening");
+      filterMicBtn.classList.remove("listening");
+      filterVoiceStatus.classList.remove("listening");
+    }
+
+    function restoreDefaultOnEnd() {
+      recognition.onend = () => {
+        if (activeVoiceTarget === "main" && pendingVoiceSave) {
+          commitPendingVoiceSave();
+        }
+        activeVoiceTarget = null;
+        resetVoiceUI();
+      };
+    }
+
+    micBtn.addEventListener("click", () => startVoiceFor("main"));
+    labelMicBtn.addEventListener("click", () => startVoiceFor("label"));
+    filterMicBtn.addEventListener("click", () => startVoiceFor("filter"));
+
+    recognition.onstart = () => {
+      if (activeVoiceTarget === "main") {
+        pendingVoiceSave = null;
+        lastAutoSavedKey = "";
+        micBtn.classList.add("listening");
+        voiceStatus.classList.add("active");
+        voiceStatus.textContent = FORMAT_CONFIG[currentFormat].listeningHint;
+        transcriptBox.style.display = "block";
+        transcriptBox.textContent = "Heard: ...";
+      } else if (activeVoiceTarget === "label") {
+        labelMicBtn.classList.add("listening");
+        labelVoiceStatus.classList.add("visible", "listening");
+        labelVoiceText.textContent = 'Listening... Speak item label now (e.g., "Kirkland Olive Oil" or "clear")';
+      } else if (activeVoiceTarget === "filter") {
+        filterMicBtn.classList.add("listening");
+        filterVoiceStatus.classList.add("visible", "listening");
+        filterVoiceText.textContent = 'Listening... Speak barcode digits, label, format (e.g. "EAN 13"), or "clear filter"';
+      }
+    };
+
+    recognition.onresult = (event) => {
+      let transcript = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+
+      if (activeVoiceTarget === "main") {
+        const { codePart, hasSaveAs, labelPart } = splitDictationAndSaveAs(transcript);
+
+        if (currentFormat === "CODE128") {
+          const parsedText = parseSpokenToCode128(codePart);
+          if (parsedText.length > 0) {
+            upcInput.value = parsedText.slice(0, FORMAT_CONFIG.CODE128.maxLength);
+          }
+        } else {
+          const extractedDigits = parseSpokenToDigits(codePart);
+          if (extractedDigits.length > 0) {
+            upcInput.value = extractedDigits.slice(0, FORMAT_CONFIG[currentFormat].maxLength);
+          }
+        }
+
+        if (hasSaveAs) {
+          labelInput.value = labelPart;
+          transcriptBox.textContent = labelPart
+            ? `Heard: "${codePart}" → Label: "${labelPart}" (will save to list)`
+            : `Heard: "${codePart}" → Speak label after "save as"...`;
+        } else {
+          transcriptBox.textContent = `Heard: "${transcript}"`;
+        }
+
+        processInput(upcInput.value);
+
+        let isFinal = false;
+        if (event.results && event.results.length > 0) {
+          isFinal = Array.from(event.results).every(res => res.isFinal);
+        }
+
+        if (hasSaveAs && currentEncodedCode) {
+          pendingVoiceSave = {
+            format: currentFormat,
+            code: currentEncodedCode,
+            label: labelPart,
+            key: `${currentFormat}|${currentEncodedCode}|${labelPart}`
+          };
+          if (isFinal) {
+            commitPendingVoiceSave();
+          }
+        } else {
+          pendingVoiceSave = null;
+        }
+      } else if (activeVoiceTarget === "label") {
+        const trimmed = transcript.trim();
+        if (/^(clear|clear label|reset|none)$/i.test(trimmed)) {
+          labelInput.value = "";
+          processInput(upcInput.value);
+          labelVoiceStatus.classList.add("visible");
+          labelVoiceText.textContent = `Heard: "${transcript}" → Cleared item label`;
+        } else {
+          const formatted = formatSpokenLabel(trimmed);
+          labelInput.value = formatted;
+          processInput(upcInput.value);
+          labelVoiceStatus.classList.add("visible");
+          labelVoiceText.textContent = `Heard: "${transcript}" → Label: "${formatted}"`;
+        }
+      } else if (activeVoiceTarget === "filter") {
+        const parsed = parseSpokenHistoryFilter(transcript);
+        if (parsed.reset) {
+          resetHistoryFilters();
+          filterVoiceStatus.classList.add("visible");
+          filterVoiceText.textContent = `Heard: "${transcript}" → Reset all filters`;
+        } else {
+          if (parsed.format) {
+            setHistoryFilterFormat(parsed.format);
+          }
+          setHistorySearchQuery(parsed.query);
+          renderHistory();
+
+          const summaryParts = [];
+          if (parsed.format) {
+            summaryParts.push(`Format: ${parsed.format === "ALL" ? "All" : FORMAT_CONFIG[parsed.format].name}`);
+          }
+          if (parsed.query) {
+            summaryParts.push(`Query: "${parsed.query}"`);
+          }
+          filterVoiceStatus.classList.add("visible");
+          filterVoiceText.textContent = summaryParts.length > 0
+            ? `Heard: "${transcript}" → ${summaryParts.join(" · ")}`
+            : `Heard: "${transcript}"`;
+        }
+      }
+    };
+
+    recognition.onerror = (event) => {
+      if (activeVoiceTarget === "label") {
+        labelVoiceStatus.classList.add("visible");
+        labelVoiceStatus.classList.remove("listening");
+        if (event.error === "not-allowed") {
+          labelVoiceText.textContent = "Microphone access blocked. Enable microphone permission in browser settings.";
+        } else if (event.error !== "aborted") {
+          labelVoiceText.textContent = `Label voice input stopped (${event.error}). Try again or type manually.`;
+        }
+      } else if (activeVoiceTarget === "filter") {
+        filterVoiceStatus.classList.add("visible");
+        filterVoiceStatus.classList.remove("listening");
+        if (event.error === "not-allowed") {
+          filterVoiceText.textContent = "Microphone access blocked. Enable microphone permission in browser settings.";
+        } else if (event.error !== "aborted") {
+          filterVoiceText.textContent = `Voice search stopped (${event.error}). Try again or type in the search box.`;
+        }
+      } else {
+        if (event.error === "not-allowed") {
+          showAlert("error", "Microphone access was blocked. Allow microphone permission in your browser settings to use voice input.");
+        } else if (event.error !== "aborted") {
+          showAlert("warning", `Voice input stopped (${event.error}). Try again or type manually.`);
+        }
+      }
+    };
+
+    restoreDefaultOnEnd();
+  }
+
+  // Initial render
+  switchFormat("UPCA");
+  renderHistory();
+})();
+</script>
+</body>
+</html>
